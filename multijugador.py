@@ -395,7 +395,7 @@ class Juego:
                 {  # Ruta 1: Inferior Azul -> Derecha Azul -> Base Enemiga
                     "id": "aliados_ruta_azul",
                     "puntos": self.mapa["rutas"][0]["puntos"].copy() +  # Ruta azul inferior (0)
-                              self.mapa["rutas"][3]["puntos"].copy(),   # Ruta derecha azul (3)
+                              self.mapa["rutas"][3]["puntos"][1:],      # Ruta derecha azul (3) (omitir primer punto para evitar duplicados)
                     "destino": destino_final
                 },
                 {  # Ruta 2: Diagonal Amarilla directa
@@ -406,7 +406,7 @@ class Juego:
                 {  # Ruta 3: Izquierda Roja -> Superior Roja -> Base Enemiga
                     "id": "aliados_ruta_roja",
                     "puntos": self.mapa["rutas"][2]["puntos"].copy() +  # Ruta izquierda roja (2)
-                              self.mapa["rutas"][1]["puntos"].copy(),   # Ruta superior roja (1)
+                              self.mapa["rutas"][1]["puntos"][1:],      # Ruta superior roja (1) (omitir primer punto)
                     "destino": destino_final
                 }
             ]
@@ -418,24 +418,27 @@ class Juego:
             rutas = [
                 {  # Ruta 1: Superior Roja -> Izquierda Roja -> Base Aliada
                     "id": "enemigos_ruta_roja",
-                    "puntos": self.mapa["rutas"][1]["puntos"].copy() +  # Ruta superior roja (1)
-                              self.mapa["rutas"][2]["puntos"].copy(),   # Ruta izquierda roja (2)
+                    "puntos": [punto_inicio] +  # Comenzar desde la base enemiga
+                              self.mapa["rutas"][1]["puntos"][::-1] +  # Ruta superior roja invertida (de derecha a izquierda)
+                              self.mapa["rutas"][2]["puntos"][1:],     # Ruta izquierda roja (omitir primer punto)
                     "destino": destino_final
                 },
-                {  # Ruta 2: Diagonal Amarilla directa
+                {  # Ruta 2: Diagonal Amarilla directa (invertida para enemigos)
                     "id": "enemigos_ruta_amarilla",
-                    "puntos": self.mapa["rutas"][4]["puntos"].copy(),  # Ruta amarilla (4)
+                    "puntos": [punto_inicio] +  # Comenzar desde la base enemiga
+                              self.mapa["rutas"][4]["puntos"][::-1],  # Ruta amarilla invertida
                     "destino": destino_final
                 },
                 {  # Ruta 3: Derecha Azul -> Inferior Azul -> Base Aliada
                     "id": "enemigos_ruta_azul",
-                    "puntos": self.mapa["rutas"][3]["puntos"].copy() +  # Ruta derecha azul (3)
-                              self.mapa["rutas"][0]["puntos"].copy(),   # Ruta inferior azul (0)
+                    "puntos": [punto_inicio] +  # Comenzar desde la base enemiga
+                              self.mapa["rutas"][3]["puntos"][::-1] +  # Ruta derecha azul invertida (de arriba a abajo)
+                              self.mapa["rutas"][0]["puntos"][::-1][1:],  # Ruta inferior azul invertida (omitir primer punto)
                     "destino": destino_final
                 }
             ]
         
-        # Generar 1 minion de cada tipo por ruta (3 minions por equipo)
+        # Resto del código (generación de minions) permanece igual...
         for ruta in rutas:
             for tipo in tipos_minions:
                 stats = {
@@ -449,14 +452,14 @@ class Juego:
                     "vida": stats["vida"],
                     "daño": stats["daño"],
                     "velocidad": stats["velocidad"],
-                    "ruta_id": ruta["id"],  # Identificador único de la ruta
+                    "ruta_id": ruta["id"],
                     "pos": list(punto_inicio),
                     "objetivo": None,
                     "equipo": equipo,
                     "rango_ataque": stats["rango_ataque"],
                     "destino": ruta["destino"],
                     "puntos_ruta": ruta["puntos"].copy(),
-                    "indice_punto_actual": 0  # Para seguir el punto actual en la ruta
+                    "indice_punto_actual": 0
                 })
         
         return oleada

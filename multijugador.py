@@ -381,78 +381,42 @@ class Juego:
                             (datos["pos"][0] - vida_width//2, datos["pos"][1] - 50, vida_actual, 5))
 
     def generar_oleada(self, equipo):
-        """Genera una oleada de minions para un equipo (aliado/enemigo) en todas sus rutas"""
+        """Genera una oleada de minions (melee, caster, cañón) por ruta hacia el nexo enemigo"""
         oleada = []
+        tipos_minions = ["melee", "caster", "siege"]  # Tipos de minions
         
-        # Determinar rutas según el equipo
+        # Rutas según el equipo (aliados: roja, blanca izq, amarilla | enemigos: azul, blanca der, amarilla)
         if equipo == "aliados":
-            rutas = [0, 1, 2, 4]  # Índices de rutas roja, blanca izq, amarilla
+            rutas = [1, 2, 4]  # Índices de rutas aliadas
+            destino = self.nexos["enemigos"][0]  # Nexo enemigo
         else:
-            rutas = [0, 3, 4]  # Índices de rutas azul, blanca der, amarilla
+            rutas = [0, 3, 4]  # Índices de rutas enemigas
+            destino = self.nexos["aliados"][0]  # Nexo aliado
         
-        # Minions básicos para cada ruta
         for ruta_idx in rutas:
             ruta = self.mapa["rutas"][ruta_idx]
             
-            # 3 Melee minions por ruta
-            for _ in range(3):
+            # Generar 1 minion de cada tipo por ruta
+            for tipo in tipos_minions:
+                stats = {
+                    "melee": {"vida": 100, "daño": 15, "velocidad": 2, "rango_ataque": 40},
+                    "caster": {"vida": 60, "daño": 25, "velocidad": 1.8, "rango_ataque": 80},
+                    "siege": {"vida": 150, "daño": 40, "velocidad": 1.5, "rango_ataque": 120}
+                }[tipo]
+                
                 oleada.append({
-                    "tipo": "melee",
-                    "vida": 100,
-                    "daño": 10,
-                    "velocidad": self.calcular_velocidad(ruta, 30),  # 30 segs a mitad de ruta
+                    "tipo": tipo,
+                    "vida": stats["vida"],
+                    "daño": stats["daño"],
+                    "velocidad": stats["velocidad"],
                     "ruta_actual": ruta_idx,
-                    "pos": list(self.nexos["aliados"][0] if equipo == "aliados" else self.nexos["enemigos"][0]),
+                    "pos": list(self.nexos["enemigos"][0] if equipo == "enemigos" else self.nexos["aliados"][0]),
                     "objetivo": None,
                     "equipo": equipo,
-                    "rango_ataque": 50,
-                    "ruta_inicial": ruta_idx
+                    "rango_ataque": stats["rango_ataque"],
+                    "destino": destino,
+                    "puntos_ruta": ruta["puntos"].copy()  # Copia de la ruta asignada
                 })
-            
-            # 3 Caster minions por ruta
-            for _ in range(3):
-                oleada.append({
-                    "tipo": "caster",
-                    "vida": 60,
-                    "daño": 15,
-                    "velocidad": self.calcular_velocidad(ruta, 30) * 0.9,  # Un poco más lento
-                    "ruta_actual": ruta_idx,
-                    "pos": list(self.nexos["aliados"][0] if equipo == "aliados" else self.nexos["enemigos"][0]),
-                    "objetivo": None,
-                    "equipo": equipo,
-                    "rango_ataque": 150,
-                    "ruta_inicial": ruta_idx
-                })
-        
-        # Siege minion (cañón) - depende del tiempo de juego
-        tiempo_minutos = self.oleadas["tiempo_juego"] / 60
-        lleva_canon = False
-        
-        if tiempo_minutos < 14:
-            if (self.oleadas["contador_oleadas"] + 1) % 3 == 0:
-                lleva_canon = True
-        elif tiempo_minutos < 25:
-            if (self.oleadas["contador_oleadas"] + 1) % 2 == 0:
-                lleva_canon = True
-        else:
-            lleva_canon = True
-        
-        if lleva_canon:
-            # Un siege minion por ruta principal (no diagonal)
-            for ruta_idx in rutas:
-                if ruta_idx != 4:  # No en ruta amarilla
-                    oleada.append({
-                        "tipo": "siege",
-                        "vida": 150,
-                        "daño": 25,
-                        "velocidad": self.calcular_velocidad(self.mapa["rutas"][ruta_idx], 30) * 0.7,
-                        "ruta_actual": ruta_idx,
-                        "pos": list(self.nexos["aliados"][0] if equipo == "aliados" else self.nexos["enemigos"][0]),
-                        "objetivo": None,
-                        "equipo": equipo,
-                        "rango_ataque": 200,
-                        "ruta_inicial": ruta_idx
-                    })
         
         return oleada
     
@@ -512,78 +476,96 @@ class Juego:
                 })
 
     def actualizar_minions(self):
-        """Actualiza la posición y estado de todos los minions"""
+        """Actualiza posición, cambio de ruta y ataque entre minions"""
         for equipo in ["aliados", "enemigos"]:
             for minion in self.minions[equipo][:]:
+                # --- Movimiento ---
                 ruta_idx = minion["ruta_actual"]
-                if ruta_idx < len(self.mapa["rutas"]):
-                    ruta = self.mapa["rutas"][ruta_idx]
-                    
-                    # Mover hacia el siguiente punto de la ruta
-                    if len(ruta["puntos"]) > 1:
-                        objetivo_x, objetivo_y = ruta["puntos"][-1]  # Ir al final de la ruta
-                        
-                        # Calcular dirección
-                        dx = objetivo_x - minion["pos"][0]
-                        dy = objetivo_y - minion["pos"][1]
-                        distancia = (dx**2 + dy**2)**0.5
-                        
-                        if distancia > 5:  # Si no ha llegado
-                            # Normalizar y mover
-                            minion["pos"][0] += (dx / distancia) * minion["velocidad"]
-                            minion["pos"][1] += (dy / distancia) * minion["velocidad"]
-                        else:
-                            # Cambiar a siguiente ruta si es la amarilla (conexión entre rutas)
-                            if ruta_idx == 4:  # Ruta amarilla
-                                if equipo == "aliados":
-                                    minion["ruta_actual"] = 0  # Cambiar a ruta azul (enemiga)
-                                else:
-                                    minion["ruta_actual"] = 1  # Cambiar a ruta roja (aliada)
-                            else:
-                                # Eliminar minion si llega al final de una ruta no conectada
-                                self.minions[equipo].remove(minion)
-                                continue
+                ruta = self.mapa["rutas"][ruta_idx]
                 
-                # Verificar colisiones con estructuras enemigas
-                estructuras_enemigas = []
-                if equipo == "aliados":
-                    estructuras_enemigas = self.torres["enemigas"] + self.inhibidores["enemigos"] + self.nexos["enemigos"]
+                if not minion["puntos_ruta"]:
+                    destino_final = minion["destino"]
                 else:
-                    estructuras_enemigas = self.torres["aliadas"] + self.inhibidores["aliados"] + self.nexos["aliados"]
+                    destino_final = minion["puntos_ruta"][0]
                 
-                for estructura in estructuras_enemigas:
-                    ex, ey = estructura
-                    distancia = ((minion["pos"][0] - ex)**2 + (minion["pos"][1] - ey)**2)**0.5
+                # Mover hacia el destino
+                dx = destino_final[0] - minion["pos"][0]
+                dy = destino_final[1] - minion["pos"][1]
+                distancia = (dx**2 + dy**2)**0.5
+                
+                if distancia > 5:
+                    minion["pos"][0] += (dx / distancia) * minion["velocidad"]
+                    minion["pos"][1] += (dy / distancia) * minion["velocidad"]
+                else:
+                    if minion["puntos_ruta"]:
+                        minion["puntos_ruta"].pop(0)
                     
-                    if distancia < minion["rango_ataque"]:  # Rango de ataque
-                        minion["objetivo"] = estructura
-                        # Aquí deberías implementar la lógica de ataque
-                        break
+                    # Cambiar de ruta si llega al final de la actual
+                    if not minion["puntos_ruta"]:
+                        if ((ruta_idx == 4 and equipo == "enemigos") or 
+                            (ruta_idx == 1 and equipo == "aliados")):
+                            minion["ruta_actual"] = 1 if equipo == "enemigos" else 0  # Cambiar a ruta roja/azul
+                            minion["puntos_ruta"] = self.mapa["rutas"][minion["ruta_actual"]]["puntos"].copy()
+                        else:
+                            minion["puntos_ruta"] = [minion["destino"]]
                 
-                # Verificar si el minion murió
-                if minion["vida"] <= 0:
-                    self.minions[equipo].remove(minion)
+                # --- Ataque entre minions ---
+                minion["objetivo"] = None
+                equipo_opuesto = "enemigos" if equipo == "aliados" else "aliados"
+                
+                for otro_minion in self.minions[equipo_opuesto]:
+                    distancia = ((minion["pos"][0] - otro_minion["pos"][0])**2 + 
+                                (minion["pos"][1] - otro_minion["pos"][1])**2)**0.5
+                    
+                    if distancia < minion["rango_ataque"]:
+                        minion["objetivo"] = otro_minion
+                        otro_minion["vida"] -= minion["daño"] * 0.1  # Daño por frame (ajustable)
+                        
+                        if otro_minion["vida"] <= 0:
+                            self.minions[equipo_opuesto].remove(otro_minion)
+                        break
+
+    def verificar_ataque(self, minion):
+        """Verifica si el minion está en rango de ataque de una estructura enemiga"""
+        estructuras_enemigas = []
+        if minion["equipo"] == "aliados":
+            estructuras_enemigas = self.torres["enemigas"] + self.inhibidores["enemigos"] + self.nexos["enemigos"]
+        else:
+            estructuras_enemigas = self.torres["aliadas"] + self.inhibidores["aliados"] + self.nexos["aliados"]
+        
+        for estructura in estructuras_enemigas:
+            ex, ey = estructura
+            distancia = ((minion["pos"][0] - ex)**2 + (minion["pos"][1] - ey)**2)**0.5
+            if distancia < minion["rango_ataque"]:
+                minion["objetivo"] = estructura
+                # Lógica de ataque (daño a la estructura)
+                break
 
     def dibujar_minions(self):
-        """Dibuja todos los minions en el mapa"""
+        """Dibuja minions con barras de vida y colores de equipo"""
         for equipo in ["aliados", "enemigos"]:
             for minion in self.minions[equipo]:
-                if minion["tipo"] in self.imagenes_minions:
-                    img = self.imagenes_minions[minion["tipo"]]
+                img = self.imagenes_minions.get(minion["tipo"], None)
+                if img:
                     self.pantalla.blit(img, (minion["pos"][0] - img.get_width()//2, 
-                                            minion["pos"][1] - img.get_height()//2))
+                                        minion["pos"][1] - img.get_height()//2))
                 
-                # Dibujar barra de vida con color de equipo
+                # Barra de vida
+                vida_max = {
+                    "melee": 100,
+                    "caster": 60,
+                    "siege": 150
+                }[minion["tipo"]]
+                
                 vida_width = 40
-                vida_max = 100 if minion["tipo"] == "melee" else 60 if minion["tipo"] == "caster" else 150
                 vida_actual = max(0, (minion["vida"] / vida_max)) * vida_width
                 
-                # Color de fondo de la barra (siempre rojo oscuro)
+                # Fondo rojo oscuro
                 pygame.draw.rect(self.pantalla, (100, 0, 0), 
                                 (minion["pos"][0] - vida_width//2, minion["pos"][1] - 30, vida_width, 5))
                 
-                # Color de la vida según equipo
-                color_vida = (0, 100, 255) if minion["equipo"] == "aliados" else (255, 50, 50)
+                # Vida (azul para aliados, rojo para enemigos)
+                color_vida = (0, 100, 255) if equipo == "aliados" else (255, 50, 50)
                 pygame.draw.rect(self.pantalla, color_vida, 
                                 (minion["pos"][0] - vida_width//2, minion["pos"][1] - 30, vida_actual, 5))
 

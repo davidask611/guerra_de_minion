@@ -231,17 +231,17 @@ class Juego:
 
     def crear_rutas_fijas(self):
         """Crea las rutas fijas en el mapa"""
-        # Ruta azul (superior) ahora será roja
-        ruta_azul = {
+        # Ruta roja
+        ruta_roja = {
             "color": (255, 0, 0),  # Rojo
             "puntos": [
                 (49, 100),  # inicio
                 (self.ANCHO - 49, 100)  # fin
             ]
         }
-        
-        # Ruta roja (inferior) ahora será azul
-        ruta_roja = {
+
+        # Ruta azul
+        ruta_azul = {
             "color": (0, 0, 255),  # Azul
             "puntos": [
                 (49, self.ALTO - 100),
@@ -249,9 +249,9 @@ class Juego:
             ]
         }
 
-        # Ruta blanca izquierda (conecta arriba e abajo)
-        ruta_blanca_izq = {
-            "color": (255, 255, 255),
+        # Ruta roja izquierda (conecta arriba e abajo)
+        ruta_roja_izq = {
+            "color": (255, 0, 0),
             "puntos": [
                 (49, 100),
                 (49, self.ALTO - 100)
@@ -259,8 +259,8 @@ class Juego:
         }
 
         # Ruta blanca derecha (conecta arriba e abajo)
-        ruta_blanca_der = {
-            "color": (255, 255, 255),
+        ruta_azul_der = {
+            "color": (0, 0, 255),
             "puntos": [
                 (self.ANCHO - 49, 100),
                 (self.ANCHO - 49, self.ALTO - 100)
@@ -277,7 +277,7 @@ class Juego:
         }
 
         self.mapa["rutas"] = [
-            ruta_azul, ruta_roja, ruta_blanca_izq, ruta_blanca_der, ruta_amarilla
+            ruta_azul, ruta_roja, ruta_roja_izq, ruta_azul_der, ruta_amarilla
         ]
 
     def dibujar_mapa(self):

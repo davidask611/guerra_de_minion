@@ -918,17 +918,14 @@ class Juego:
                 self.dibujar_jugador()
                 self.dibujar_otros_jugadores()
                 
-                # UI - Información del jugador
-                vida_texto = self.fuente_normal.render(f"Vida: {self.jugador['vida']}", True, (255, 255, 255))
-                self.pantalla.blit(vida_texto, (20, 20))
-                
-                # Mostrar coordenadas
+                # Footer: Mostrar coordenadas, oleada y tiempo en la parte inferior
+                footer_y = self.ALTO - 30
                 coordenadas_texto = self.fuente_normal.render(
-                    f"Posición: ({int(self.jugador['pos'][0])}, {int(self.jugador['pos'][1])})", 
-                    True, 
+                    f"Posición: ({int(self.jugador['pos'][0])}, {int(self.jugador['pos'][1])})",
+                    True,
                     (255, 255, 255)
                 )
-                self.pantalla.blit(coordenadas_texto, (20, 50))
+                self.pantalla.blit(coordenadas_texto, (20, footer_y))
                 
                 # Mostrar información de minions
                 tiempo_minutos = int(self.oleadas["tiempo_juego"] // 60)
@@ -938,7 +935,7 @@ class Juego:
                     True, 
                     (255, 255, 255)
                 )
-                self.pantalla.blit(minions_texto, (20, 80))
+                self.pantalla.blit(minions_texto, (self.ANCHO // 2 - minions_texto.get_width() // 2, footer_y + 5))
                 
                 # Mostrar estado de conexión
                 if not self.conectado:

@@ -1,10 +1,12 @@
-# multijugador.py - Juego multijugador completo con rutas fijas, torres, inhibidores y nexos
+# multijugador.py - Juego multijugador completo con rutas fijas, torres, inhibidores, nexos y minions
 import pygame
 import sys
 import json
 import socket
 import random
 from threading import Thread
+from datetime import datetime
+
 class Juego:
     def __init__(self):
         pygame.init()
@@ -19,7 +21,10 @@ class Juego:
             "personaje": None,
             "vida": 100,
             "pos": [self.ANCHO // 2, self.ALTO - 100],
-            "velocidad": 5
+            "velocidad": 5,
+            "daño": 20,
+            "nivel": 1,
+            "experiencia": 0
         }
         self.otros_jugadores = {}
         self.socket_cliente = None
@@ -37,6 +42,20 @@ class Juego:
         self.configurar_inhibidores()  # Configurar los inhibidores
         self.configurar_nexos()  # Configurar los nexos
         
+        # Sistema de minions
+        self.minions = {
+            "aliados": [],
+            "enemigos": []
+        }
+        self.oleadas = {
+            "tiempo_ultima_oleada": 0,
+            "intervalo": 30,  # segundos
+            "contador_oleadas": 0,
+            "tiempo_juego": 0,  # en segundos
+            "primer_oleada": False
+        }
+        self.imagenes_minions = {}  # Para almacenar las imágenes de los minions
+        
         # Cargar recursos
         self.cargar_recursos()
     
@@ -47,7 +66,7 @@ class Juego:
             self.fuente_normal = pygame.font.SysFont("Arial", 30)
             self.fuente_pequena = pygame.font.SysFont("Arial", 20)
             
-            # Cargar imágenes de personajes (usar imágenes por defecto si no existen)
+            # Cargar imágenes de personajes
             try:
                 self.personaje1_img = pygame.image.load("assets/personaje1.png").convert_alpha()
                 self.personaje2_img = pygame.image.load("assets/personaje2.png").convert_alpha()
@@ -58,12 +77,12 @@ class Juego:
                 self.personaje2_img = pygame.Surface((70, 70), pygame.SRCALPHA)
                 pygame.draw.circle(self.personaje2_img, (255, 0, 0), (35, 35), 35)
             
-            # Cargar imágenes de torres (usar imágenes por defecto si no existen)
+            # Cargar imágenes de torres
             try:
                 self.torre_aliada_img = pygame.image.load("assets/torre_aliada.png").convert_alpha()
                 self.torre_enemiga_img = pygame.image.load("assets/torre_enemiga.png").convert_alpha()
             except:
-                # Crear imágenes por defecto si no se encuentran los archivos
+                # Crear imágenes por defecto
                 self.torre_aliada_img = pygame.Surface((60, 60), pygame.SRCALPHA)
                 pygame.draw.rect(self.torre_aliada_img, (0, 255, 0), (0, 0, 60, 60), 0, 10)
                 self.torre_enemiga_img = pygame.Surface((60, 60), pygame.SRCALPHA)
@@ -74,7 +93,7 @@ class Juego:
                 self.inhibidor_aliado_img = pygame.image.load("assets/inhibidor_aliado.png").convert_alpha()
                 self.inhibidor_enemigo_img = pygame.image.load("assets/inhibidor_enemigo.png").convert_alpha()
             except:
-                # Crear imágenes por defecto si no se encuentran los archivos
+                # Crear imágenes por defecto
                 self.inhibidor_aliado_img = pygame.Surface((50, 50), pygame.SRCALPHA)
                 pygame.draw.polygon(self.inhibidor_aliado_img, (0, 255, 0), [(25, 0), (50, 50), (25, 40), (0, 50)])
                 self.inhibidor_enemigo_img = pygame.Surface((50, 50), pygame.SRCALPHA)
@@ -85,13 +104,29 @@ class Juego:
                 self.nexo_aliado_img = pygame.image.load("assets/nexo_aliado.png").convert_alpha()
                 self.nexo_enemigo_img = pygame.image.load("assets/nexo_enemigo.png").convert_alpha()
             except:
-                # Crear imágenes por defecto si no se encuentran los archivos
+                # Crear imágenes por defecto
                 self.nexo_aliado_img = pygame.Surface((80, 80), pygame.SRCALPHA)
                 pygame.draw.circle(self.nexo_aliado_img, (0, 200, 0), (40, 40), 40)
                 pygame.draw.circle(self.nexo_aliado_img, (0, 255, 0), (40, 40), 30)
                 self.nexo_enemigo_img = pygame.Surface((80, 80), pygame.SRCALPHA)
                 pygame.draw.circle(self.nexo_enemigo_img, (200, 0, 0), (40, 40), 40)
                 pygame.draw.circle(self.nexo_enemigo_img, (255, 0, 0), (40, 40), 30)
+            
+            # Cargar imágenes de minions
+            try:
+                self.imagenes_minions["melee"] = pygame.image.load("assets/minion_mele.png").convert_alpha()
+                self.imagenes_minions["caster"] = pygame.image.load("assets/caster_minion.png").convert_alpha()
+                self.imagenes_minions["siege"] = pygame.image.load("assets/cañon_minion.png").convert_alpha()
+            except:
+                # Crear imágenes por defecto
+                self.imagenes_minions["melee"] = pygame.Surface((40, 40), pygame.SRCALPHA)
+                pygame.draw.rect(self.imagenes_minions["melee"], (200, 0, 0), (0, 0, 40, 40))
+                
+                self.imagenes_minions["caster"] = pygame.Surface((40, 40), pygame.SRCALPHA)
+                pygame.draw.rect(self.imagenes_minions["caster"], (0, 0, 200), (0, 0, 40, 40))
+                
+                self.imagenes_minions["siege"] = pygame.Surface((50, 50), pygame.SRCALPHA)
+                pygame.draw.rect(self.imagenes_minions["siege"], (150, 150, 0), (0, 0, 50, 50))
             
             # Escalar imágenes
             self.personaje1_img = pygame.transform.scale(self.personaje1_img, (70, 70))
@@ -102,6 +137,9 @@ class Juego:
             self.inhibidor_enemigo_img = pygame.transform.scale(self.inhibidor_enemigo_img, (50, 50))
             self.nexo_aliado_img = pygame.transform.scale(self.nexo_aliado_img, (80, 80))
             self.nexo_enemigo_img = pygame.transform.scale(self.nexo_enemigo_img, (80, 80))
+            self.imagenes_minions["melee"] = pygame.transform.scale(self.imagenes_minions["melee"], (40, 40))
+            self.imagenes_minions["caster"] = pygame.transform.scale(self.imagenes_minions["caster"], (40, 40))
+            self.imagenes_minions["siege"] = pygame.transform.scale(self.imagenes_minions["siege"], (50, 50))
             
             # Fondos
             self.fondo_menu = pygame.Surface((self.ANCHO, self.ALTO))
@@ -305,6 +343,14 @@ class Juego:
         nombre_texto = self.fuente_normal.render(self.jugador["nombre"], True, (255, 255, 255))
         self.pantalla.blit(nombre_texto, (self.jugador["pos"][0] - nombre_texto.get_width() // 2, 
                            self.jugador["pos"][1] - 40))
+        
+        # Barra de vida
+        vida_width = 70
+        vida_actual = max(0, (self.jugador["vida"] / 100)) * vida_width
+        pygame.draw.rect(self.pantalla, (255, 0, 0), 
+                        (self.jugador["pos"][0] - vida_width//2, self.jugador["pos"][1] - 50, vida_width, 5))
+        pygame.draw.rect(self.pantalla, (0, 255, 0), 
+                        (self.jugador["pos"][0] - vida_width//2, self.jugador["pos"][1] - 50, vida_actual, 5))
     
     def dibujar_otros_jugadores(self):
         """Dibuja a los otros jugadores conectados"""
@@ -325,6 +371,221 @@ class Juego:
             nombre_texto = self.fuente_normal.render(datos["nombre"], True, (255, 255, 255))
             self.pantalla.blit(nombre_texto, (datos["pos"][0] - nombre_texto.get_width() // 2, 
                                datos["pos"][1] - 40))
+            
+            # Barra de vida
+            vida_width = 70
+            vida_actual = max(0, (datos["vida"] / 100) * vida_width)
+            pygame.draw.rect(self.pantalla, (255, 0, 0), 
+                            (datos["pos"][0] - vida_width//2, datos["pos"][1] - 50, vida_width, 5))
+            pygame.draw.rect(self.pantalla, (0, 255, 0), 
+                            (datos["pos"][0] - vida_width//2, datos["pos"][1] - 50, vida_actual, 5))
+
+    def generar_oleada(self, equipo):
+        """Genera una oleada de minions para un equipo (aliado/enemigo) en todas sus rutas"""
+        oleada = []
+        
+        # Determinar rutas según el equipo
+        if equipo == "aliados":
+            rutas = [0, 1, 2, 4]  # Índices de rutas roja, blanca izq, amarilla
+        else:
+            rutas = [0, 3, 4]  # Índices de rutas azul, blanca der, amarilla
+        
+        # Minions básicos para cada ruta
+        for ruta_idx in rutas:
+            ruta = self.mapa["rutas"][ruta_idx]
+            
+            # 3 Melee minions por ruta
+            for _ in range(3):
+                oleada.append({
+                    "tipo": "melee",
+                    "vida": 100,
+                    "daño": 10,
+                    "velocidad": self.calcular_velocidad(ruta, 30),  # 30 segs a mitad de ruta
+                    "ruta_actual": ruta_idx,
+                    "pos": list(self.nexos["aliados"][0] if equipo == "aliados" else self.nexos["enemigos"][0]),
+                    "objetivo": None,
+                    "equipo": equipo,
+                    "rango_ataque": 50,
+                    "ruta_inicial": ruta_idx
+                })
+            
+            # 3 Caster minions por ruta
+            for _ in range(3):
+                oleada.append({
+                    "tipo": "caster",
+                    "vida": 60,
+                    "daño": 15,
+                    "velocidad": self.calcular_velocidad(ruta, 30) * 0.9,  # Un poco más lento
+                    "ruta_actual": ruta_idx,
+                    "pos": list(self.nexos["aliados"][0] if equipo == "aliados" else self.nexos["enemigos"][0]),
+                    "objetivo": None,
+                    "equipo": equipo,
+                    "rango_ataque": 150,
+                    "ruta_inicial": ruta_idx
+                })
+        
+        # Siege minion (cañón) - depende del tiempo de juego
+        tiempo_minutos = self.oleadas["tiempo_juego"] / 60
+        lleva_canon = False
+        
+        if tiempo_minutos < 14:
+            if (self.oleadas["contador_oleadas"] + 1) % 3 == 0:
+                lleva_canon = True
+        elif tiempo_minutos < 25:
+            if (self.oleadas["contador_oleadas"] + 1) % 2 == 0:
+                lleva_canon = True
+        else:
+            lleva_canon = True
+        
+        if lleva_canon:
+            # Un siege minion por ruta principal (no diagonal)
+            for ruta_idx in rutas:
+                if ruta_idx != 4:  # No en ruta amarilla
+                    oleada.append({
+                        "tipo": "siege",
+                        "vida": 150,
+                        "daño": 25,
+                        "velocidad": self.calcular_velocidad(self.mapa["rutas"][ruta_idx], 30) * 0.7,
+                        "ruta_actual": ruta_idx,
+                        "pos": list(self.nexos["aliados"][0] if equipo == "aliados" else self.nexos["enemigos"][0]),
+                        "objetivo": None,
+                        "equipo": equipo,
+                        "rango_ataque": 200,
+                        "ruta_inicial": ruta_idx
+                    })
+        
+        return oleada
+    
+    def calcular_velocidad(self, ruta, tiempo_objetivo_segundos):
+        """Calcula la velocidad necesaria para llegar a la mitad de la ruta en el tiempo objetivo"""
+        if len(ruta["puntos"]) < 2:
+            return 2  # Valor por defecto
+        
+        # Calcular distancia total de la ruta
+        x1, y1 = ruta["puntos"][0]
+        x2, y2 = ruta["puntos"][-1]
+        distancia_total = ((x2 - x1)**2 + (y2 - y1)**2)**0.5
+        
+        # Distancia a la mitad de la ruta
+        distancia_mitad = distancia_total / 2
+        
+        # Velocidad = distancia / tiempo (convertir segundos a frames)
+        velocidad = distancia_mitad / (tiempo_objetivo_segundos * 60)  # 60 FPS
+        
+        return max(velocidad, 0.5)  # Velocidad mínima
+
+    def actualizar_oleadas(self, dt):
+        """Actualiza el temporizador de oleadas y genera nuevas si es necesario"""
+        self.oleadas["tiempo_juego"] += dt / 1000  # Convertir ms a segundos
+        
+        # La primera oleada sale a los 65 segundos (1:05)
+        if not self.oleadas["primer_oleada"] and self.oleadas["tiempo_juego"] >= 65:
+            self.oleadas["primer_oleada"] = True
+            self.oleadas["tiempo_ultima_oleada"] = self.oleadas["tiempo_juego"]
+            self.oleadas["contador_oleadas"] += 1
+            
+            # Generar oleadas para ambos equipos
+            self.minions["aliados"].extend(self.generar_oleada("aliados"))
+            self.minions["enemigos"].extend(self.generar_oleada("enemigos"))
+            
+            if self.conectado:
+                self.enviar_mensaje("nueva_oleada", {
+                    "contador": self.oleadas["contador_oleadas"],
+                    "tiempo": self.oleadas["tiempo_juego"]
+                })
+            return
+        
+        tiempo_desde_ultima = self.oleadas["tiempo_juego"] - self.oleadas["tiempo_ultima_oleada"]
+        
+        if tiempo_desde_ultima >= self.oleadas["intervalo"] and self.oleadas["primer_oleada"]:
+            self.oleadas["tiempo_ultima_oleada"] = self.oleadas["tiempo_juego"]
+            self.oleadas["contador_oleadas"] += 1
+            
+            # Generar oleadas para ambos equipos
+            self.minions["aliados"].extend(self.generar_oleada("aliados"))
+            self.minions["enemigos"].extend(self.generar_oleada("enemigos"))
+            
+            if self.conectado:
+                self.enviar_mensaje("nueva_oleada", {
+                    "contador": self.oleadas["contador_oleadas"],
+                    "tiempo": self.oleadas["tiempo_juego"]
+                })
+
+    def actualizar_minions(self):
+        """Actualiza la posición y estado de todos los minions"""
+        for equipo in ["aliados", "enemigos"]:
+            for minion in self.minions[equipo][:]:
+                ruta_idx = minion["ruta_actual"]
+                if ruta_idx < len(self.mapa["rutas"]):
+                    ruta = self.mapa["rutas"][ruta_idx]
+                    
+                    # Mover hacia el siguiente punto de la ruta
+                    if len(ruta["puntos"]) > 1:
+                        objetivo_x, objetivo_y = ruta["puntos"][-1]  # Ir al final de la ruta
+                        
+                        # Calcular dirección
+                        dx = objetivo_x - minion["pos"][0]
+                        dy = objetivo_y - minion["pos"][1]
+                        distancia = (dx**2 + dy**2)**0.5
+                        
+                        if distancia > 5:  # Si no ha llegado
+                            # Normalizar y mover
+                            minion["pos"][0] += (dx / distancia) * minion["velocidad"]
+                            minion["pos"][1] += (dy / distancia) * minion["velocidad"]
+                        else:
+                            # Cambiar a siguiente ruta si es la amarilla (conexión entre rutas)
+                            if ruta_idx == 4:  # Ruta amarilla
+                                if equipo == "aliados":
+                                    minion["ruta_actual"] = 0  # Cambiar a ruta azul (enemiga)
+                                else:
+                                    minion["ruta_actual"] = 1  # Cambiar a ruta roja (aliada)
+                            else:
+                                # Eliminar minion si llega al final de una ruta no conectada
+                                self.minions[equipo].remove(minion)
+                                continue
+                
+                # Verificar colisiones con estructuras enemigas
+                estructuras_enemigas = []
+                if equipo == "aliados":
+                    estructuras_enemigas = self.torres["enemigas"] + self.inhibidores["enemigos"] + self.nexos["enemigos"]
+                else:
+                    estructuras_enemigas = self.torres["aliadas"] + self.inhibidores["aliados"] + self.nexos["aliados"]
+                
+                for estructura in estructuras_enemigas:
+                    ex, ey = estructura
+                    distancia = ((minion["pos"][0] - ex)**2 + (minion["pos"][1] - ey)**2)**0.5
+                    
+                    if distancia < minion["rango_ataque"]:  # Rango de ataque
+                        minion["objetivo"] = estructura
+                        # Aquí deberías implementar la lógica de ataque
+                        break
+                
+                # Verificar si el minion murió
+                if minion["vida"] <= 0:
+                    self.minions[equipo].remove(minion)
+
+    def dibujar_minions(self):
+        """Dibuja todos los minions en el mapa"""
+        for equipo in ["aliados", "enemigos"]:
+            for minion in self.minions[equipo]:
+                if minion["tipo"] in self.imagenes_minions:
+                    img = self.imagenes_minions[minion["tipo"]]
+                    self.pantalla.blit(img, (minion["pos"][0] - img.get_width()//2, 
+                                            minion["pos"][1] - img.get_height()//2))
+                
+                # Dibujar barra de vida con color de equipo
+                vida_width = 40
+                vida_max = 100 if minion["tipo"] == "melee" else 60 if minion["tipo"] == "caster" else 150
+                vida_actual = max(0, (minion["vida"] / vida_max)) * vida_width
+                
+                # Color de fondo de la barra (siempre rojo oscuro)
+                pygame.draw.rect(self.pantalla, (100, 0, 0), 
+                                (minion["pos"][0] - vida_width//2, minion["pos"][1] - 30, vida_width, 5))
+                
+                # Color de la vida según equipo
+                color_vida = (0, 100, 255) if minion["equipo"] == "aliados" else (255, 50, 50)
+                pygame.draw.rect(self.pantalla, color_vida, 
+                                (minion["pos"][0] - vida_width//2, minion["pos"][1] - 30, vida_actual, 5))
 
     def manejar_movimiento(self):
         """Permite movimiento por todas las rutas fijas y centra al jugador en la ruta"""
@@ -614,6 +875,11 @@ class Juego:
         elif tipo == "actualizacion_posicion":
             if mensaje["id"] in self.otros_jugadores:
                 self.otros_jugadores[mensaje["id"]]["pos"] = mensaje["pos"]
+        elif tipo == "nueva_oleada":
+            self.oleadas["contador_oleadas"] = mensaje.get("contador", 0)
+            self.oleadas["tiempo_juego"] = mensaje.get("tiempo", 0)
+            self.minions["aliados"].extend(self.generar_oleada("aliados"))
+            self.minions["enemigos"].extend(self.generar_oleada("enemigos"))
 
     def enviar_mensaje(self, tipo, contenido):
         """Enviar mensaje al servidor"""
@@ -640,11 +906,15 @@ class Juego:
             elif self.estado == "juego":
                 self.pantalla.fill((0, 0, 0))  # Fondo negro
                 
+                dt = self.reloj.get_time()  # Obtener tiempo desde el último frame
+                self.actualizar_oleadas(dt)
                 self.manejar_movimiento()
                 self.dibujar_mapa()
-                self.dibujar_torres()  # Dibujar torres
-                self.dibujar_inhibidores()  # Dibujar inhibidores
-                self.dibujar_nexos()  # Dibujar nexos
+                self.dibujar_torres()
+                self.dibujar_inhibidores()
+                self.dibujar_nexos()
+                self.actualizar_minions()
+                self.dibujar_minions()
                 self.dibujar_jugador()
                 self.dibujar_otros_jugadores()
                 
@@ -659,6 +929,16 @@ class Juego:
                     (255, 255, 255)
                 )
                 self.pantalla.blit(coordenadas_texto, (20, 50))
+                
+                # Mostrar información de minions
+                tiempo_minutos = int(self.oleadas["tiempo_juego"] // 60)
+                tiempo_segundos = int(self.oleadas["tiempo_juego"] % 60)
+                minions_texto = self.fuente_pequena.render(
+                    f"Oleada: {self.oleadas['contador_oleadas']} | Tiempo: {tiempo_minutos}:{tiempo_segundos:02d}",
+                    True, 
+                    (255, 255, 255)
+                )
+                self.pantalla.blit(minions_texto, (20, 80))
                 
                 # Mostrar estado de conexión
                 if not self.conectado:

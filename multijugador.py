@@ -502,12 +502,26 @@ class Juego:
                     
                     # Cambiar de ruta si llega al final de la actual
                     if not minion["puntos_ruta"]:
-                        if ((ruta_idx == 4 and equipo == "enemigos") or 
-                            (ruta_idx == 1 and equipo == "aliados")):
-                            minion["ruta_actual"] = 1 if equipo == "enemigos" else 0  # Cambiar a ruta roja/azul
-                            minion["puntos_ruta"] = self.mapa["rutas"][minion["ruta_actual"]]["puntos"].copy()
-                        else:
-                            minion["puntos_ruta"] = [minion["destino"]]
+                        # Cambios de ruta para enemigos
+                        if equipo == "enemigos":
+                            if ruta_idx == 4:  # Diagonal amarilla
+                                minion["ruta_actual"] = 0  # Cambia a ruta azul (superior)
+                                minion["puntos_ruta"] = self.mapa["rutas"][0]["puntos"].copy()
+                            elif ruta_idx == 0:  # Ruta azul (superior)
+                                minion["ruta_actual"] = 2  # Cambia a ruta blanca izquierda
+                                minion["puntos_ruta"] = self.mapa["rutas"][2]["puntos"].copy()
+                            else:
+                                minion["puntos_ruta"] = [minion["destino"]]
+                        # Cambios de ruta para aliados
+                        elif equipo == "aliados":
+                            if ruta_idx == 4:  # Diagonal amarilla
+                                minion["ruta_actual"] = 1  # Cambia a ruta roja (inferior)
+                                minion["puntos_ruta"] = self.mapa["rutas"][1]["puntos"].copy()
+                            elif ruta_idx == 1:  # Ruta roja (inferior)
+                                minion["ruta_actual"] = 3  # Cambia a ruta blanca derecha
+                                minion["puntos_ruta"] = self.mapa["rutas"][3]["puntos"].copy()
+                            else:
+                                minion["puntos_ruta"] = [minion["destino"]]
                 
                 # --- Ataque entre minions ---
                 minion["objetivo"] = None

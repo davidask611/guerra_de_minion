@@ -5,7 +5,7 @@ import json
 import socket
 import random
 from threading import Thread
-
+# hola
 class Juego:
     def __init__(self):
         pygame.init()

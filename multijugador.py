@@ -231,18 +231,18 @@ class Juego:
 
     def crear_rutas_fijas(self):
         """Crea las rutas fijas en el mapa"""
-        # Ruta azul (superior)
+        # Ruta azul (superior) ahora será roja
         ruta_azul = {
-            "color": (0, 0, 255),
+            "color": (255, 0, 0),  # Rojo
             "puntos": [
                 (49, 100),  # inicio
                 (self.ANCHO - 49, 100)  # fin
             ]
         }
         
-        # Ruta roja (inferior)
+        # Ruta roja (inferior) ahora será azul
         ruta_roja = {
-            "color": (255, 0, 0),
+            "color": (0, 0, 255),  # Azul
             "puntos": [
                 (49, self.ALTO - 100),
                 (self.ANCHO - 49, self.ALTO - 100)
@@ -482,24 +482,24 @@ class Juego:
                 # --- Movimiento ---
                 ruta_idx = minion["ruta_actual"]
                 ruta = self.mapa["rutas"][ruta_idx]
-                
+
                 if not minion["puntos_ruta"]:
                     destino_final = minion["destino"]
                 else:
                     destino_final = minion["puntos_ruta"][0]
-                
+
                 # Mover hacia el destino
                 dx = destino_final[0] - minion["pos"][0]
                 dy = destino_final[1] - minion["pos"][1]
                 distancia = (dx**2 + dy**2)**0.5
-                
+
                 if distancia > 5:
                     minion["pos"][0] += (dx / distancia) * minion["velocidad"]
                     minion["pos"][1] += (dy / distancia) * minion["velocidad"]
                 else:
                     if minion["puntos_ruta"]:
                         minion["puntos_ruta"].pop(0)
-                    
+
                     # Cambiar de ruta si llega al final de la actual
                     if not minion["puntos_ruta"]:
                         # Cambios de ruta para enemigos
@@ -522,19 +522,19 @@ class Juego:
                                 minion["puntos_ruta"] = self.mapa["rutas"][3]["puntos"].copy()
                             else:
                                 minion["puntos_ruta"] = [minion["destino"]]
-                
+
                 # --- Ataque entre minions ---
                 minion["objetivo"] = None
                 equipo_opuesto = "enemigos" if equipo == "aliados" else "aliados"
-                
+
                 for otro_minion in self.minions[equipo_opuesto]:
                     distancia = ((minion["pos"][0] - otro_minion["pos"][0])**2 + 
                                 (minion["pos"][1] - otro_minion["pos"][1])**2)**0.5
-                    
+
                     if distancia < minion["rango_ataque"]:
                         minion["objetivo"] = otro_minion
                         otro_minion["vida"] -= minion["daño"] * 0.1  # Daño por frame (ajustable)
-                        
+
                         if otro_minion["vida"] <= 0:
                             self.minions[equipo_opuesto].remove(otro_minion)
                         break

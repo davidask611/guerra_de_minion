@@ -1177,6 +1177,9 @@ class Juego:
             self.socket_cliente.connect((ip_servidor, puerto))
             self.conectado = True
             
+            # Enviar mensaje inicial de conexión
+            self.enviar_mensaje("conectar", {})
+            
             # Hilo para recibir datos
             Thread(target=self.recibir_datos, daemon=True).start()
             return True
@@ -1189,10 +1192,12 @@ class Juego:
         while self.conectado:
             try:
                 datos = self.socket_cliente.recv(4096).decode('utf-8')
+                print(f"Datos recibidos: {datos}")  # Debug
                 if datos:
-                    mensajes = datos.split('|')  # Separar mensajes en caso de concatenación
+                    mensajes = datos.split('|')
                     for msg in mensajes:
                         if msg:
+                            print(f"Procesando mensaje: {msg}")  # Debug
                             self.procesar_mensaje(json.loads(msg))
             except Exception as e:
                 print(f"Error recibiendo datos: {e}")
@@ -1207,6 +1212,9 @@ class Juego:
             if tipo == "bienvenida":
                 print(f"Conectado al servidor: {mensaje.get('mensaje')}")
                 self.id_cliente = mensaje.get("id")
+                # Actualizar lista de jugadores con los datos recibidos
+                if "jugadores" in mensaje:
+                    self.otros_jugadores = mensaje["jugadores"]
             elif tipo == "jugadores":
                 # Validar estructura de los jugadores
                 jugadores_validos = {}

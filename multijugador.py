@@ -509,8 +509,11 @@ class Juego:
         # Obtener estructuras enemigas según el equipo del minion
         equipo_opuesto = "enemigos" if minion["equipo"] == "aliados" else "aliados"
         
+        # Para torres, usamos "enemigas" o "aliadas" (femenino)
+        equipo_torres = "enemigas" if equipo_opuesto == "enemigos" else "aliadas"
+        
         estructuras_enemigas = (
-            self.estructuras["torres"][equipo_opuesto + "s"] +  # "enemigas" o "aliadas"
+            self.estructuras["torres"][equipo_torres] +  # Usamos el femenino para torres
             self.estructuras["inhibidores"][equipo_opuesto] + 
             self.estructuras["nexos"][equipo_opuesto]
         )

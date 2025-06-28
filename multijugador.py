@@ -263,7 +263,7 @@ class Juego:
 
     def crear_rutas_fijas(self):
         """Crea las rutas fijas en el mapa"""
-        # Ruta roja
+        # Ruta roja (superior)
         ruta_roja = {
             "color": (255, 0, 0),  # Rojo
             "puntos": [
@@ -272,7 +272,7 @@ class Juego:
             ]
         }
 
-        # Ruta azul
+        # Ruta azul (inferior)
         ruta_azul = {
             "color": (0, 0, 255),  # Azul
             "puntos": [
@@ -462,17 +462,22 @@ class Juego:
                             (datos["pos"][0] - vida_width//2, datos["pos"][1] - 50, vida_actual, 5))
 
     def generar_oleada(self, equipo):
-        """Genera una oleada completa de minions con todos los atributos necesarios"""
+        """Genera una oleada de minions (melee, caster, cañón) por ruta hacia el nexo enemigo"""
         oleada = []
-        tipos_minions = ["melee", "caster", "siege"]
+        tipos_minions = ["melee", "caster", "siege"]  # Tipos de minions
         
-        # Determinar rutas según el equipo
-        rutas = [1, 2, 4] if equipo == "aliados" else [0, 3, 4]
+        # Rutas según el equipo (aliados: roja, blanca izq, amarilla | enemigos: azul, blanca der, amarilla)
+        if equipo == "aliados":
+            rutas = [1, 2, 4]  # Índices de rutas aliadas
+            destino = self.nexos["enemigos"][0]  # Nexo enemigo
+        else:
+            rutas = [0, 3, 4]  # Índices de rutas enemigas
+            destino = self.nexos["aliados"][0]  # Nexo aliado
         
         for ruta_idx in rutas:
             ruta = self.mapa["rutas"][ruta_idx]
-            destino = self.estructuras["nexos"]["enemigos"][0]["pos"] if equipo == "aliados" else self.estructuras["nexos"]["aliados"][0]["pos"]
             
+            # Generar 1 minion de cada tipo por ruta
             for tipo in tipos_minions:
                 # Stats base para cada tipo
                 stats = {
@@ -480,7 +485,7 @@ class Juego:
                     "caster": {"vida": 60, "daño": 25, "velocidad": 1.8, "rango_ataque": 80},
                     "siege": {"vida": 150, "daño": 40, "velocidad": 1.5, "rango_ataque": 120}
                 }[tipo]
-                
+
                 oleada.append({
                     "tipo": tipo,
                     "vida": stats["vida"],
@@ -488,18 +493,14 @@ class Juego:
                     "daño": stats["daño"],
                     "velocidad": stats["velocidad"],
                     "ruta_actual": ruta_idx,
-                    "pos": list(self.estructuras["nexos"]["enemigos"][0]["pos"] if equipo == "enemigos" 
-                          else self.estructuras["nexos"]["aliados"][0]["pos"]),
+                    "pos": list(self.nexos["enemigos"][0] if equipo == "enemigos" else self.nexos["aliados"][0]),
                     "objetivo": None,
                     "equipo": equipo,
                     "rango_ataque": stats["rango_ataque"],
                     "destino": destino,
-                    "puntos_ruta": ruta["puntos"].copy(),
-                    "reduccion_daño": 0,
-                    "ultimo_ataque": 0,  # Para el delay de ataque
-                    "tiempo_creacion": self.oleadas["tiempo_juego"]  # Para seguimiento
+                    "puntos_ruta": ruta["puntos"].copy()  # Copia de la ruta asignada
                 })
-        
+
         return oleada
     
     def calcular_velocidad(self, ruta, tiempo_objetivo_segundos):
@@ -558,68 +559,40 @@ class Juego:
                 })
 
     def actualizar_minions(self):
-        """Actualiza posición, cambio de ruta y ataque entre minions"""
+        """Actualiza el movimiento de los minions según sus rutas asignadas"""
         for equipo in ["aliados", "enemigos"]:
             for minion in self.minions[equipo][:]:
                 # --- Movimiento ---
-                ruta_idx = minion["ruta_actual"]
-                ruta = self.mapa["rutas"][ruta_idx]
+                puntos_ruta = minion["puntos_ruta"]
+                indice_punto = minion["indice_punto_actual"]
 
-                if not minion["puntos_ruta"]:
-                    destino_final = minion["destino"]
+                # Si no quedan puntos, ir al destino final
+                if indice_punto >= len(puntos_ruta):
+                    destino = minion["destino"]
                 else:
-                    destino_final = minion["puntos_ruta"][0]
+                    destino = puntos_ruta[indice_punto]
 
-                # Mover hacia el destino
-                dx = destino_final[0] - minion["pos"][0]
-                dy = destino_final[1] - minion["pos"][1]
+                # Calcular dirección y mover
+                dx = destino[0] - minion["pos"][0]
+                dy = destino[1] - minion["pos"][1]
                 distancia = (dx**2 + dy**2)**0.5
 
-                if distancia > 5:
+                if distancia > 5:  # Mover si no ha llegado al punto
                     minion["pos"][0] += (dx / distancia) * minion["velocidad"]
                     minion["pos"][1] += (dy / distancia) * minion["velocidad"]
                 else:
-                    if minion["puntos_ruta"]:
-                        minion["puntos_ruta"].pop(0)
+                    minion["indice_punto_actual"] += 1  # Pasar al siguiente punto
 
-                    # Cambiar de ruta si llega al final de la actual
-                    if not minion["puntos_ruta"]:
-                        # Cambios de ruta para enemigos
-                        if equipo == "enemigos":
-                            if ruta_idx == 4:  # Diagonal amarilla
-                                minion["ruta_actual"] = 0  # Cambia a ruta azul (superior)
-                                minion["puntos_ruta"] = self.mapa["rutas"][0]["puntos"].copy()
-                            elif ruta_idx == 0:  # Ruta azul (superior)
-                                minion["ruta_actual"] = 2  # Cambia a ruta blanca izquierda
-                                minion["puntos_ruta"] = self.mapa["rutas"][2]["puntos"].copy()
-                            else:
-                                minion["puntos_ruta"] = [minion["destino"]]
-                        # Cambios de ruta para aliados
-                        elif equipo == "aliados":
-                            if ruta_idx == 4:  # Diagonal amarilla
-                                minion["ruta_actual"] = 1  # Cambia a ruta roja (inferior)
-                                minion["puntos_ruta"] = self.mapa["rutas"][1]["puntos"].copy()
-                            elif ruta_idx == 1:  # Ruta roja (inferior)
-                                minion["ruta_actual"] = 3  # Cambia a ruta blanca derecha
-                                minion["puntos_ruta"] = self.mapa["rutas"][3]["puntos"].copy()
-                            else:
-                                minion["puntos_ruta"] = [minion["destino"]]
+                # --- Verificar si llegó al final de la ruta ---
+                if indice_punto >= len(puntos_ruta):
+                    distancia_final = ((minion["pos"][0] - minion["destino"][0])**2 + 
+                                     (minion["pos"][1] - minion["destino"][1])**2)**0.5
+                    if distancia_final < 10:  # Si llegó a la base enemiga
+                        self.minions[equipo].remove(minion)
+                        # Aquí podrías añadir daño al nexo si es necesario
 
-                # --- Ataque entre minions ---
-                minion["objetivo"] = None
-                equipo_opuesto = "enemigos" if equipo == "aliados" else "aliados"
-
-                for otro_minion in self.minions[equipo_opuesto]:
-                    distancia = ((minion["pos"][0] - otro_minion["pos"][0])**2 + 
-                                (minion["pos"][1] - otro_minion["pos"][1])**2)**0.5
-
-                    if distancia < minion["rango_ataque"]:
-                        minion["objetivo"] = otro_minion
-                        otro_minion["vida"] -= minion["daño"] * 0.1  # Daño por frame (ajustable)
-
-                        if otro_minion["vida"] <= 0:
-                            self.minions[equipo_opuesto].remove(otro_minion)
-                        break
+                # --- Ataque a estructuras/enemigos (opcional) ---
+                self.verificar_ataque(minion)
 
                 # --- Ataque a estructuras ---
                 self.verificar_ataque(minion)
@@ -634,284 +607,18 @@ class Juego:
         ruta_actual = minion["ruta_actual"]
         equipo = minion["equipo"]
         estructuras_enemigas = []
-        
-        # Determinar estructuras enemigas según el equipo
-        if equipo == "aliados":
-            torres_enemigas = self.estructuras["torres"]["enemigas"]
-            inhibidores_enemigos = self.estructuras["inhibidores"]["enemigos"]
-            nexo_enemigo = self.estructuras["nexos"]["enemigos"]
+        if minion["equipo"] == "aliados":
+            estructuras_enemigas = self.torres["enemigas"] + self.inhibidores["enemigos"] + self.nexos["enemigos"]
         else:
-            torres_enemigas = self.estructuras["torres"]["aliadas"]
-            inhibidores_enemigos = self.estructuras["inhibidores"]["aliados"]
-            nexo_enemigo = self.estructuras["nexos"]["aliados"]
-    
-        # 1. Verificar torres en su ruta (ordenadas)
-        torres_ruta = [t for t in torres_enemigas 
-                      if t["ruta"] == ruta_actual and not t["destruida"]]
-        torres_ruta.sort(key=lambda x: x["orden"])
-        
-        if torres_ruta:
-            estructuras_enemigas.append(torres_ruta[0])
-        
-        # 2. Si no hay torres, ver inhibidor de su ruta
-        elif not torres_ruta:
-            inhibidor_ruta = next((i for i in inhibidores_enemigos 
-                                 if i["ruta"] == ruta_actual), None)
-            
-            if inhibidor_ruta and not inhibidor_ruta["destruido"]:
-                estructuras_enemigas.append(inhibidor_ruta)
-            # 3. Si inhibidor de su ruta está destruido, puede atacar nexo
-            elif inhibidor_ruta and inhibidor_ruta["destruido"] and nexo_enemigo:
-                if len(nexo_enemigo) > 0 and not nexo_enemigo[0]["destruido"]:
-                    estructuras_enemigas.append(nexo_enemigo[0])
-        
-        # Lógica de ataque con delay de 5 segundos
-        tiempo_actual = pygame.time.get_ticks() / 1000  # Convertir a segundos
-        
-        if 'ultimo_ataque' not in minion:
-            minion['ultimo_ataque'] = 0
+            estructuras_enemigas = self.torres["aliadas"] + self.inhibidores["aliados"] + self.nexos["aliados"]
         
         for estructura in estructuras_enemigas:
-            # Calcular distancia al objetivo
-            ex, ey = estructura["pos"]
-            mx, my = minion["pos"]
-            distancia = ((mx - ex)**2 + (my - ey)**2)**0.5
-            
-            # Verificar si está en rango y ha pasado el delay
-            if distancia < minion["rango_ataque"] and tiempo_actual - minion['ultimo_ataque'] >= 5:
+            ex, ey = estructura
+            distancia = ((minion["pos"][0] - ex)**2 + (minion["pos"][1] - ey)**2)**0.5
+            if distancia < minion["rango_ataque"]:
                 minion["objetivo"] = estructura
-                
-                # Calcular daño aplicando reducción
-                reduccion = estructura.get("reduccion_daño", 0)
-                daño_reducido = minion["daño"] * (1 - reduccion / 100)
-                estructura["vida"] -= daño_reducido
-                
-                # Actualizar tiempo del último ataque
-                minion['ultimo_ataque'] = tiempo_actual
-                
-                # Verificar si la estructura fue destruida
-                if estructura["vida"] <= 0:
-                    self.procesar_destruccion(estructura, equipo)
-                
-                break  # Solo atacar un objetivo por frame
-
-    def procesar_destruccion(self, estructura, equipo_atacante):
-        """Procesa completamente la destrucción de estructuras y sus consecuencias"""
-        # Estructura es una torre
-        if "torres" in estructura:
-            estructura["destruida"] = True
-            estructura["vida"] = 0
-        
-        # Estructura es un inhibidor
-        elif "inhibidores" in estructura:
-            estructura["destruido"] = True
-            estructura["vida"] = 0
-            estructura["tiempo_reconstruccion"] = 0
-            
-            # Activar nexo correspondiente
-            if equipo_atacante == "aliados":
-                # Para cada nexo aliado, verificar si hay inhibidores enemigos destruidos
-                for nexo in self.estructuras["nexos"]["aliados"]:
-                    inhibidores_destruidos = [i for i in self.estructuras["inhibidores"]["enemigos"] 
-                                            if i["destruido"]]
-                    nexo["puede_atacar"] = len(inhibidores_destruidos) > 0
-            else:
-                # Para cada nexo enemigo, verificar si hay inhibidores aliados destruidos
-                for nexo in self.estructuras["nexos"]["enemigos"]:
-                    inhibidores_destruidos = [i for i in self.estructuras["inhibidores"]["aliados"] 
-                                            if i["destruido"]]
-                    nexo["puede_atacar"] = len(inhibidores_destruidos) > 0
-    
-        # Estructura es un nexo
-        elif "nexos" in estructura:
-            estructura["destruido"] = True
-            estructura["vida"] = 0
-            self.verificar_estado_juego()
-
-    def actualizar_inhibidores(self, dt):
-        """Actualiza el estado de los inhibidores y su reconstrucción"""
-        for equipo in ["aliados", "enemigos"]:
-            for inhib in self.estructuras["inhibidores"][equipo]:
-                if inhib["destruido"]:
-                    inhib["tiempo_reconstruccion"] += dt / 1000  # Convertir ms a segundos
-                    
-                    # Reconstruir después de 60 segundos
-                    if inhib["tiempo_reconstruccion"] >= 60:
-                        inhib["vida"] = inhib["vida_max"]
-                        inhib["destruido"] = False
-                        inhib["tiempo_reconstruccion"] = 0
-                        
-                        # Si es un inhibidor enemigo reconstruido, desactivar ataque del nexo aliado
-                        if equipo == "enemigos":
-                            for nexo in self.estructuras["nexos"]["aliados"]:
-                                nexo["puede_atacar"] = any(
-                                    i["destruido"] 
-                                    for i in self.estructuras["inhibidores"]["enemigos"]
-                                )
-                        else:
-                            for nexo in self.estructuras["nexos"]["enemigos"]:
-                                nexo["puede_atacar"] = any(
-                                    i["destruido"] 
-                                    for i in self.estructuras["inhibidores"]["aliados"]
-                                )
-
-    def actualizar_estructuras(self, dt):
-        """Actualización completa del estado de todas las estructuras"""
-        # Actualizar tiempo de reconstrucción de inhibidores
-        for equipo in ["aliados", "enemigos"]:
-            for inhib in self.estructuras["inhibidores"][equipo]:
-                if inhib["destruido"]:
-                    inhib["tiempo_reconstruccion"] += dt / 1000  # ms a segundos
-                    
-                    # Reconstruir después de 60 segundos
-                    if inhib["tiempo_reconstruccion"] >= 60:
-                        inhib["vida"] = inhib["vida_max"]
-                        inhib["destruido"] = False
-                        inhib["tiempo_reconstruccion"] = 0
-                        
-                        # Verificar si debemos desactivar el nexo opuesto
-                        equipo_opuesto = "enemigos" if equipo == "aliados" else "aliados"
-                        for nexo in self.estructuras["nexos"][equipo_opuesto]:
-                            # Verificar si quedan inhibidores destruidos
-                            inhibidores_destruidos = [i for i in self.estructuras["inhibidores"][equipo]
-                                            if i["destruido"]]
-                            nexo["puede_atacar"] = len(inhibidores_destruidos) > 0
-        
-        # Actualizar estado de ataque de los nexos (por si algún cambio no fue detectado)
-        for nexo in self.estructuras["nexos"]["aliados"]:
-            inhibidores_destruidos = [i for i in self.estructuras["inhibidores"]["enemigos"] 
-                                    if i["destruido"]]
-            nexo["puede_atacar"] = len(inhibidores_destruidos) > 0
-        
-        for nexo in self.estructuras["nexos"]["enemigos"]:
-            inhibidores_destruidos = [i for i in self.estructuras["inhibidores"]["aliados"] 
-                                    if i["destruido"]]
-            nexo["puede_atacar"] = len(inhibidores_destruidos) > 0
-        
-        # Actualizar cooldown de ataques de torres
-        tiempo_actual = self.oleadas["tiempo_juego"]
-        for equipo in ["aliadas", "enemigas"]:
-            for torre in self.estructuras["torres"][equipo]:
-                if not torre["destruida"] and tiempo_actual - torre["ultimo_ataque"] >= 10:
-                    torre["puede_atacar"] = True
-                else:
-                    torre["puede_atacar"] = False
-
-    def atacar_estructuras(self):
-        """Las estructuras atacan a los objetivos en su rango con cooldown"""
-        tiempo_actual = self.oleadas["tiempo_juego"]
-        
-        # Torres atacan
-        for equipo in ["aliadas", "enemigas"]:
-            for torre in self.estructuras["torres"][equipo]:
-                if torre["destruida"]:
-                    continue
-                    
-                # Verificar cooldown (10 segundos entre ataques)
-                if tiempo_actual - torre["ultimo_ataque"] < 10:
-                    continue
-                    
-                # Buscar objetivos (jugadores o minions enemigos)
-                objetivos = []
-                equipo_opuesto = "enemigos" if equipo == "aliadas" else "aliados"
-                
-                # Minions enemigos
-                for minion in self.minions[equipo_opuesto]:
-                    distancia = ((torre["pos"][0] - minion["pos"][0])**2 + 
-                               (torre["pos"][1] - minion["pos"][1])**2)**0.5
-                    if distancia <= torre["rango"]:
-                        objetivos.append(("minion", minion))
-                
-                # Jugadores enemigos
-                if equipo == "aliadas":
-                    for jugador_id, jugador in self.otros_jugadores.items():
-                        distancia = ((torre["pos"][0] - jugador["pos"][0])**2 + 
-                                   (torre["pos"][1] - jugador["pos"][1])**2)**0.5
-                        if distancia <= torre["rango"]:
-                            objetivos.append(("jugador", jugador))
-                else:
-                    distancia = ((torre["pos"][0] - self.jugador["pos"][0])**2 + 
-                               (torre["pos"][1] - self.jugador["pos"][1])**2)**0.5
-                    if distancia <= torre["rango"]:
-                        objetivos.append(("jugador", self.jugador))
-                
-                # Atacar al primer objetivo encontrado
-                if objetivos:
-                    tipo, objetivo = objetivos[0]
-                    daño_real = torre["daño"] * (1 - objetivo.get("reduccion_daño", 0) / 100)
-                    
-                    if tipo == "minion":
-                        objetivo["vida"] -= daño_real
-                        if objetivo["vida"] <= 0:
-                            self.minions[equipo_opuesto].remove(objetivo)
-                    else:  # jugador
-                        objetivo["vida"] -= daño_real
-                    
-                    # Actualizar tiempo del último ataque
-                    torre["ultimo_ataque"] = tiempo_actual
-        
-        # Nexos atacan (si pueden)
-        for equipo in ["aliados", "enemigos"]:
-            for nexo in self.estructuras["nexos"][equipo]:
-                if nexo["destruido"] or not nexo["puede_atacar"]:
-                    continue
-                    
-                # Buscar objetivos (igual que las torres)
-                objetivos = []
-                equipo_opuesto = "enemigos" if equipo == "aliados" else "aliados"
-                
-                # Minions enemigos
-                for minion in self.minions[equipo_opuesto]:
-                    distancia = ((nexo["pos"][0] - minion["pos"][0])**2 + 
-                               (nexo["pos"][1] - minion["pos"][1])**2)**0.5
-                    if distancia <= nexo["rango"]:
-                        objetivos.append(("minion", minion))
-                
-                # Jugadores enemigos
-                if equipo == "aliados":
-                    for jugador_id, jugador in self.otros_jugadores.items():
-                        distancia = ((nexo["pos"][0] - jugador["pos"][0])**2 + 
-                                   (nexo["pos"][1] - jugador["pos"][1])**2)**0.5
-                        if distancia <= nexo["rango"]:
-                            objetivos.append(("jugador", jugador))
-                else:
-                    distancia = ((nexo["pos"][0] - self.jugador["pos"][0])**2 + 
-                               (nexo["pos"][1] - self.jugador["pos"][1])**2)**0.5
-                    if distancia <= nexo["rango"]:
-                        objetivos.append(("jugador", self.jugador))
-                
-                # Atacar al primer objetivo encontrado
-                if objetivos:
-                    tipo, objetivo = objetivos[0]
-                    daño_real = nexo["daño"] * (1 - objetivo.get("reduccion_daño", 0) / 100)
-                    
-                    if tipo == "minion":
-                        objetivo["vida"] -= daño_real
-                        if objetivo["vida"] <= 0:
-                            self.minions[equipo_opuesto].remove(objetivo)
-                    else:  # jugador
-                        objetivo["vida"] -= daño_real
-
-    def verificar_estado_juego(self):
-        """Verificación completa del estado de victoria/derrota"""
-        # Verificar nexo aliado
-        for nexo in self.estructuras["nexos"]["aliados"]:
-            if nexo["destruido"]:
-                self.mostrar_mensaje_fin("¡Derrota! El nexo aliado fue destruido")
-                return True
-        
-        # Verificar nexo enemigo
-        for nexo in self.estructuras["nexos"]["enemigos"]:
-            if nexo["destruido"]:
-                self.mostrar_mensaje_fin("¡Victoria! El nexo enemigo fue destruido")
-                return True
-        
-        return False
-
-    def mostrar_mensaje_fin(self, mensaje):
-        """Muestra un mensaje de fin de juego"""
-        self.estado = "fin"
-        self.mensaje_fin = mensaje
+                # Lógica de ataque (daño a la estructura)
+                break
 
     def dibujar_minions(self):
         """Dibuja minions con barras de vida y colores de equipo"""

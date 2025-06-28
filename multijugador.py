@@ -405,15 +405,19 @@ class Juego:
                 },
                 {  # Ruta 3: Izquierda Roja -> Superior Roja -> Base Enemiga
                     "id": "aliados_ruta_roja",
-                    "puntos": self.mapa["rutas"][2]["puntos"].copy() +  # Ruta izquierda roja (2)
-                              self.mapa["rutas"][1]["puntos"][1:],      # Ruta superior roja (1) (omitir primer punto)
+                    "puntos": [
+                        (40, 490),  # Base aliada (punto_inicio)
+                        (49, self.ALTO - 100),  # Inicio ruta izquierda roja (parte inferior)
+                        (49, 100),              # Fin ruta izquierda roja (parte superior)
+                        (self.ANCHO - 49, 100)  # Fin ruta superior roja (base enemiga)
+                    ],
                     "destino": destino_final
                 }
             ]
         else:  # Enemigos
             punto_inicio = self.nexos["enemigos"][0]  # Base enemiga (esquina sup. derecha)
             destino_final = self.nexos["aliados"][0]   # Base aliada (esquina inf. izquierda)
-            
+
             # Rutas para enemigos (3 rutas distintas)
             rutas = [
                 {  # Ruta 1: Superior Roja -> Izquierda Roja -> Base Aliada

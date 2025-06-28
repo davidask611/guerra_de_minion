@@ -462,73 +462,104 @@ class Juego:
                             (datos["pos"][0] - vida_width//2, datos["pos"][1] - 50, vida_actual, 5))
 
     def generar_oleada(self, equipo):
-        """Genera una oleada de minions (melee, caster, cañón) por ruta hacia el nexo enemigo"""
+        """Genera una oleada de minions (melee, caster, cañón) con las rutas definidas"""
         oleada = []
-        tipos_minions = ["melee", "caster", "siege"]  # Tipos de minions
-
-        # Rutas según el equipo (aliados: roja, blanca izq, amarilla | enemigos: azul, blanca der, amarilla)
+        tipos_minions = ["melee", "caster", "siege"]  # 1 minion de cada tipo por ruta
+    
+        # Configuración base según el equipo
         if equipo == "aliados":
-            rutas = [1, 2, 4]  # Índices de rutas aliadas
-            destino = self.estructuras["nexos"]["enemigos"][0]  # Nexo enemigo
-        else:
-            rutas = [0, 3, 4]  # Índices de rutas enemigas
-            destino = self.estructuras["nexos"]["aliados"][0]  # Nexo aliado
-
-        for ruta_idx in rutas:
-            ruta = self.mapa["rutas"][ruta_idx]
-
-            # Generar 1 minion de cada tipo por ruta
+            try:
+                punto_inicio = self.estructuras["nexos"]["aliados"][0]["pos"]  # Base aliada
+                destino_final = self.estructuras["nexos"]["enemigos"][0]["pos"]  # Base enemiga
+            except (KeyError, IndexError):
+                punto_inicio = [40, 490]  # Valores por defecto si hay error
+                destino_final = [750, 70]
+    
+            # Rutas para aliados (3 rutas distintas)
+            rutas = [
+                {  # Ruta 1: Inferior Azul -> Derecha Azul -> Base Enemiga
+                    "id": "aliados_ruta_azul",
+                    "puntos": self.mapa["rutas"][0]["puntos"].copy() +  # Ruta azul inferior (0)
+                              self.mapa["rutas"][3]["puntos"][1:],      # Ruta derecha azul (3)
+                    "destino": destino_final
+                },
+                {  # Ruta 2: Diagonal Amarilla directa
+                    "id": "aliados_ruta_amarilla",
+                    "puntos": self.mapa["rutas"][4]["puntos"].copy(),  # Ruta amarilla (4)
+                    "destino": destino_final
+                },
+                {  # Ruta 3: Izquierda Roja -> Superior Roja -> Base Enemiga
+                    "id": "aliados_ruta_roja",
+                    "puntos": [
+                        (40, 490),  # Base aliada (punto_inicio)
+                        (49, self.ALTO - 100),  # Inicio ruta izquierda roja
+                        (49, 100),              # Fin ruta izquierda roja
+                        (self.ANCHO - 49, 100)  # Fin ruta superior roja
+                    ],
+                    "destino": destino_final
+                }
+            ]
+        else:  # Enemigos
+            try:
+                punto_inicio = self.estructuras["nexos"]["enemigos"][0]["pos"]  # Base enemiga
+                destino_final = self.estructuras["nexos"]["aliados"][0]["pos"]   # Base aliada
+            except (KeyError, IndexError):
+                punto_inicio = [750, 70]  # Valores por defecto si hay error
+                destino_final = [40, 490]
+    
+            # Rutas para enemigos (3 rutas distintas)
+            rutas = [
+                {  # Ruta 1: Superior Roja -> Izquierda Roja -> Base Aliada
+                    "id": "enemigos_ruta_roja",
+                    "puntos": [punto_inicio] +  # Base enemiga
+                              [(self.ANCHO - 49, 100), (49, 100)] +  # Ruta superior roja
+                              [(49, self.ALTO - 100)],  # Ruta izquierda roja
+                    "destino": destino_final
+                },
+                {  # Ruta 2: Diagonal Amarilla directa (invertida)
+                    "id": "enemigos_ruta_amarilla",
+                    "puntos": [punto_inicio] +  # Base enemiga
+                              [(self.ANCHO - 49, 100), (49, self.ALTO - 100)],  # Ruta amarilla
+                    "destino": destino_final
+                },
+                {  # Ruta 3: Derecha Azul -> Inferior Azul -> Base Aliada
+                    "id": "enemigos_ruta_azul",
+                    "puntos": [
+                        (750, 70),  # Base enemiga
+                        (self.ANCHO - 49, 100),  # Inicio ruta derecha azul
+                        (self.ANCHO - 49, self.ALTO - 100),  # Fin ruta derecha azul
+                        (49, self.ALTO - 100)  # Base aliada
+                    ],
+                    "destino": destino_final
+                }
+            ]
+    
+        for ruta in rutas:
             for tipo in tipos_minions:
-                # Stats base para cada tipo
                 stats = {
                     "melee": {"vida": 100, "daño": 15, "velocidad": 2, "rango_ataque": 40},
                     "caster": {"vida": 60, "daño": 25, "velocidad": 1.8, "rango_ataque": 80},
                     "siege": {"vida": 150, "daño": 40, "velocidad": 1.5, "rango_ataque": 120}
-                }[tipo]
-
+                }.get(tipo, {"vida": 100, "daño": 15, "velocidad": 2, "rango_ataque": 40})  # Default si no encuentra el tipo
+    
                 oleada.append({
                     "tipo": tipo,
                     "vida": stats["vida"],
                     "vida_max": stats["vida"],
                     "daño": stats["daño"],
                     "velocidad": stats["velocidad"],
-                    "ruta_actual": ruta_idx,
-                    "pos": list(self.estructuras["nexos"]["enemigos"][0]["pos"] if equipo == "enemigos" else self.estructuras["nexos"]["aliados"][0]["pos"]),
+                    "ruta_id": ruta["id"],
+                    "pos": list(punto_inicio),
                     "objetivo": None,
                     "equipo": equipo,
                     "rango_ataque": stats["rango_ataque"],
-                    "destino": destino["pos"],  # Acceder a la posición del nexo
-                    "puntos_ruta": ruta["puntos"].copy(),  # Copia de la ruta asignada
-                    "indice_punto_actual": 0  # Añadir este campo que faltaba
+                    "destino": ruta["destino"],
+                    "puntos_ruta": ruta["puntos"].copy(),
+                    "indice_punto_actual": 0,
+                    "reduccion_daño": 0  # Añadido para consistencia
                 })
-
+    
         return oleada
-
-    def verificar_ataque(self, minion):
-        """Verifica objetivos de ataque para minions con la nueva lógica completa"""
-        # Obtener estructuras enemigas según el equipo del minion
-        equipo_opuesto = "enemigos" if minion["equipo"] == "aliados" else "aliados"
-        
-        # Para torres, usamos "enemigas" o "aliadas" (femenino)
-        equipo_torres = "enemigas" if equipo_opuesto == "enemigos" else "aliadas"
-        
-        estructuras_enemigas = (
-            self.estructuras["torres"][equipo_torres] +  # Usamos el femenino para torres
-            self.estructuras["inhibidores"][equipo_opuesto] + 
-            self.estructuras["nexos"][equipo_opuesto]
-        )
-        
-        # Buscar la estructura más cercana en rango
-        for estructura in estructuras_enemigas:
-            if estructura.get("destruida", False) or estructura.get("destruido", False):
-                continue  # Saltar estructuras destruidas
-                
-            ex, ey = estructura["pos"]
-            distancia = ((minion["pos"][0] - ex)**2 + (minion["pos"][1] - ey)**2)**0.5
-            
-            if distancia < minion["rango_ataque"]:
-                minion["objetivo"] = estructura
-                break
     
     def calcular_velocidad(self, ruta, tiempo_objetivo_segundos):
         """Calcula la velocidad necesaria para llegar a la mitad de la ruta en el tiempo objetivo"""
@@ -621,8 +652,31 @@ class Juego:
                 # --- Ataque a estructuras/enemigos (opcional) ---
                 self.verificar_ataque(minion)
 
-                # --- Ataque a estructuras ---
-                self.verificar_ataque(minion)
+    def verificar_ataque(self, minion):
+        """Verifica si el minion está en rango de ataque de una estructura enemiga"""
+        estructuras_enemigas = []
+        if minion["equipo"] == "aliados":
+            # Aliados atacan torres, inhibidores y nexos enemigos
+            estructuras_enemigas = (
+                [(t["pos"][0], t["pos"][1], "torre") for t in self.estructuras["torres"]["enemigas"] if not t["destruida"]] +
+                [(i["pos"][0], i["pos"][1], "inhibidor") for i in self.estructuras["inhibidores"]["enemigos"] if not i["destruido"]] +
+                [(n["pos"][0], n["pos"][1], "nexo") for n in self.estructuras["nexos"]["enemigos"] if not n["destruido"]]
+            )
+        else:
+            # Enemigos atacan torres, inhibidores y nexos aliados
+            estructuras_enemigas = (
+                [(t["pos"][0], t["pos"][1], "torre") for t in self.estructuras["torres"]["aliadas"] if not t["destruida"]] +
+                [(i["pos"][0], i["pos"][1], "inhibidor") for i in self.estructuras["inhibidores"]["aliados"] if not i["destruido"]] +
+                [(n["pos"][0], n["pos"][1], "nexo") for n in self.estructuras["nexos"]["aliados"] if not n["destruido"]]
+            )
+    
+        for ex, ey, tipo in estructuras_enemigas:
+            distancia = ((minion["pos"][0] - ex)**2 + 
+                       (minion["pos"][1] - ey)**2)**0.5
+            if distancia < minion["rango_ataque"]:
+                minion["objetivo"] = (ex, ey, tipo)
+                # Aquí podrías agregar lógica para dañar la estructura
+                break
 
     def verificar_torres_ruta_destruidas(self, ruta, equipo):
         """Verifica si todas las torres de una ruta están destruidas"""
@@ -686,86 +740,143 @@ class Juego:
                 if tiempo_actual - torre["ultimo_ataque"] < 10:
                     continue
                     
+                # Obtener posición de la torre como float
+                try:
+                    torre_x = float(torre["pos"][0])
+                    torre_y = float(torre["pos"][1])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                    
                 # Buscar objetivos (jugadores o minions enemigos)
                 objetivos = []
                 equipo_opuesto = "enemigos" if equipo == "aliadas" else "aliados"
                 
                 # Minions enemigos
-                for minion in self.minions[equipo_opuesto]:
-                    distancia = ((torre["pos"][0] - minion["pos"][0])**2 + 
-                               (torre["pos"][1] - minion["pos"][1])**2)**0.5
-                    if distancia <= torre["rango"]:
-                        objetivos.append(("minion", minion))
-                
+                for minion in self.minions[equipo_opuesto][:]:  # Usamos [:] para hacer una copia
+                    try:
+                        minion_x = float(minion["pos"][0])
+                        minion_y = float(minion["pos"][1])
+                        
+                        distancia = ((torre_x - minion_x)**2 + 
+                                   (torre_y - minion_y)**2)**0.5
+                        if distancia <= torre["rango"]:
+                            objetivos.append(("minion", minion))
+                    except (KeyError, TypeError, ValueError):
+                        # Si hay un error con este minion, lo eliminamos
+                        if minion in self.minions[equipo_opuesto]:
+                            self.minions[equipo_opuesto].remove(minion)
+                        continue
+                    
                 # Jugadores enemigos
                 if equipo == "aliadas":
                     for jugador_id, jugador in self.otros_jugadores.items():
-                        distancia = ((torre["pos"][0] - jugador["pos"][0])**2 + 
-                                   (torre["pos"][1] - jugador["pos"][1])**2)**0.5
-                        if distancia <= torre["rango"]:
-                            objetivos.append(("jugador", jugador))
+                        try:
+                            jugador_x = float(jugador["pos"][0])
+                            jugador_y = float(jugador["pos"][1])
+                            distancia = ((torre_x - jugador_x)**2 + 
+                                       (torre_y - jugador_y)**2)**0.5
+                            if distancia <= torre["rango"]:
+                                objetivos.append(("jugador", jugador))
+                        except (KeyError, TypeError, ValueError):
+                            continue
                 else:
-                    distancia = ((torre["pos"][0] - self.jugador["pos"][0])**2 + 
-                               (torre["pos"][1] - self.jugador["pos"][1])**2)**0.5
-                    if distancia <= torre["rango"]:
-                        objetivos.append(("jugador", self.jugador))
-                
+                    try:
+                        jugador_x = float(self.jugador["pos"][0])
+                        jugador_y = float(self.jugador["pos"][1])
+                        distancia = ((torre_x - jugador_x)**2 + 
+                                   (torre_y - jugador_y)**2)**0.5
+                        if distancia <= torre["rango"]:
+                            objetivos.append(("jugador", self.jugador))
+                    except (KeyError, TypeError, ValueError):
+                        pass
+                    
                 # Atacar al primer objetivo encontrado
                 if objetivos:
                     tipo, objetivo = objetivos[0]
-                    daño_real = torre["daño"] * (1 - objetivo.get("reduccion_daño", 0) / 100)
-                    
-                    if tipo == "minion":
-                        objetivo["vida"] -= daño_real
-                        if objetivo["vida"] <= 0:
-                            self.minions[equipo_opuesto].remove(objetivo)
-                    else:  # jugador
-                        objetivo["vida"] -= daño_real
-                    
-                    # Actualizar tiempo del último ataque
-                    torre["ultimo_ataque"] = tiempo_actual
-        
+                    try:
+                        daño_real = torre["daño"] * (1 - objetivo.get("reduccion_daño", 0) / 100)
+                        
+                        if tipo == "minion":
+                            objetivo["vida"] -= daño_real
+                            if objetivo["vida"] <= 0:
+                                self.minions[equipo_opuesto].remove(objetivo)
+                        else:  # jugador
+                            objetivo["vida"] -= daño_real
+                        
+                        # Actualizar tiempo del último ataque
+                        torre["ultimo_ataque"] = tiempo_actual
+                    except (KeyError, TypeError, ValueError):
+                        pass
+            
         # Nexos atacan (si pueden)
         for equipo in ["aliados", "enemigos"]:
             for nexo in self.estructuras["nexos"][equipo]:
                 if nexo["destruido"] or not nexo["puede_atacar"]:
                     continue
                     
-                # Buscar objetivos (igual que las torres)
+                # Obtener posición del nexo como float
+                try:
+                    nexo_x = float(nexo["pos"][0])
+                    nexo_y = float(nexo["pos"][1])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                    
+                # Buscar objetivos
                 objetivos = []
                 equipo_opuesto = "enemigos" if equipo == "aliados" else "aliados"
                 
                 # Minions enemigos
-                for minion in self.minions[equipo_opuesto]:
-                    distancia = ((nexo["pos"][0] - minion["pos"][0])**2 + 
-                               (nexo["pos"][1] - minion["pos"][1])**2)**0.5
-                    if distancia <= nexo["rango"]:
-                        objetivos.append(("minion", minion))
-                
+                for minion in self.minions[equipo_opuesto][:]:
+                    try:
+                        minion_x = float(minion["pos"][0])
+                        minion_y = float(minion["pos"][1])
+                        
+                        distancia = ((nexo_x - minion_x)**2 + 
+                                   (nexo_y - minion_y)**2)**0.5
+                        if distancia <= nexo["rango"]:
+                            objetivos.append(("minion", minion))
+                    except (KeyError, TypeError, ValueError):
+                        if minion in self.minions[equipo_opuesto]:
+                            self.minions[equipo_opuesto].remove(minion)
+                        continue
+                    
                 # Jugadores enemigos
                 if equipo == "aliados":
                     for jugador_id, jugador in self.otros_jugadores.items():
-                        distancia = ((nexo["pos"][0] - jugador["pos"][0])**2 + 
-                                   (nexo["pos"][1] - jugador["pos"][1])**2)**0.5
-                        if distancia <= nexo["rango"]:
-                            objetivos.append(("jugador", jugador))
+                        try:
+                            jugador_x = float(jugador["pos"][0])
+                            jugador_y = float(jugador["pos"][1])
+                            distancia = ((nexo_x - jugador_x)**2 + 
+                                       (nexo_y - jugador_y)**2)**0.5
+                            if distancia <= nexo["rango"]:
+                                objetivos.append(("jugador", jugador))
+                        except (KeyError, TypeError, ValueError):
+                            continue
                 else:
-                    distancia = ((nexo["pos"][0] - self.jugador["pos"][0])**2 + 
-                               (nexo["pos"][1] - self.jugador["pos"][1])**2)**0.5
-                    if distancia <= nexo["rango"]:
-                        objetivos.append(("jugador", self.jugador))
-                
+                    try:
+                        jugador_x = float(self.jugador["pos"][0])
+                        jugador_y = float(self.jugador["pos"][1])
+                        distancia = ((nexo_x - jugador_x)**2 + 
+                                   (nexo_y - jugador_y)**2)**0.5
+                        if distancia <= nexo["rango"]:
+                            objetivos.append(("jugador", self.jugador))
+                    except (KeyError, TypeError, ValueError):
+                        pass
+                    
                 # Atacar al primer objetivo encontrado
                 if objetivos:
                     tipo, objetivo = objetivos[0]
-                    daño_real = nexo["daño"] * (1 - objetivo.get("reduccion_daño", 0) / 100)
-                    
-                    if tipo == "minion":
-                        objetivo["vida"] -= daño_real
-                        if objetivo["vida"] <= 0:
-                            self.minions[equipo_opuesto].remove(objetivo)
-                    else:  # jugador
-                        objetivo["vida"] -= daño_real
+                    try:
+                        daño_real = nexo["daño"] * (1 - objetivo.get("reduccion_daño", 0) / 100)
+                        
+                        if tipo == "minion":
+                            objetivo["vida"] -= daño_real
+                            if objetivo["vida"] <= 0:
+                                self.minions[equipo_opuesto].remove(objetivo)
+                        else:  # jugador
+                            objetivo["vida"] -= daño_real
+                    except (KeyError, TypeError, ValueError):
+                        pass
 
     def verificar_estado_juego(self):
         """Verificación completa del estado de victoria/derrota"""
@@ -1090,26 +1201,76 @@ class Juego:
 
     def procesar_mensaje(self, mensaje):
         """Procesar mensajes recibidos del servidor"""
-        tipo = mensaje.get("tipo")
-        
-        if tipo == "bienvenida":
-            print(f"Conectado al servidor: {mensaje.get('mensaje')}")
-            self.id_cliente = mensaje.get("id")
-        elif tipo == "jugadores":
-            self.otros_jugadores = mensaje.get("jugadores", {})
-        elif tipo == "nuevo_jugador":
-            self.otros_jugadores[mensaje["id"]] = mensaje
-        elif tipo == "jugador_desconectado":
-            if mensaje["id"] in self.otros_jugadores:
-                del self.otros_jugadores[mensaje["id"]]
-        elif tipo == "actualizacion_posicion":
-            if mensaje["id"] in self.otros_jugadores:
-                self.otros_jugadores[mensaje["id"]]["pos"] = mensaje["pos"]
-        elif tipo == "nueva_oleada":
-            self.oleadas["contador_oleadas"] = mensaje.get("contador", 0)
-            self.oleadas["tiempo_juego"] = mensaje.get("tiempo", 0)
-            self.minions["aliados"].extend(self.generar_oleada("aliados"))
-            self.minions["enemigos"].extend(self.generar_oleada("enemigos"))
+        try:
+            tipo = mensaje.get("tipo")
+            
+            if tipo == "bienvenida":
+                print(f"Conectado al servidor: {mensaje.get('mensaje')}")
+                self.id_cliente = mensaje.get("id")
+            elif tipo == "jugadores":
+                # Validar estructura de los jugadores
+                jugadores_validos = {}
+                for id_jugador, datos in mensaje.get("jugadores", {}).items():
+                    try:
+                        jugadores_validos[id_jugador] = {
+                            "nombre": str(datos.get("nombre", f"Jugador{id_jugador}"))[:16],
+                            "personaje": int(datos.get("personaje", 1)),
+                            "vida": float(datos.get("vida", 100)),
+                            "vida_max": float(datos.get("vida_max", 100)),
+                            "pos": [float(datos.get("pos", [0, 0])[0]), float(datos.get("pos", [0, 0])[1])],
+                            "velocidad": float(datos.get("velocidad", 5)),
+                            "daño": float(datos.get("daño", 20)),
+                            "nivel": int(datos.get("nivel", 1)),
+                            "experiencia": float(datos.get("experiencia", 0)),
+                            "reduccion_daño": float(datos.get("reduccion_daño", 0))
+                        }
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                self.otros_jugadores = jugadores_validos
+            elif tipo == "nuevo_jugador":
+                try:
+                    self.otros_jugadores[mensaje["id"]] = {
+                        "nombre": str(mensaje.get("nombre", f"Jugador{mensaje['id']}"))[:16],
+                        "personaje": int(mensaje.get("personaje", 1)),
+                        "vida": float(mensaje.get("vida", 100)),
+                        "vida_max": float(mensaje.get("vida_max", 100)),
+                        "pos": [float(mensaje.get("pos", [0, 0])[0]), float(mensaje.get("pos", [0, 0])[1])],
+                        "velocidad": float(mensaje.get("velocidad", 5)),
+                        "daño": float(mensaje.get("daño", 20)),
+                        "nivel": int(mensaje.get("nivel", 1)),
+                        "experiencia": float(mensaje.get("experiencia", 0)),
+                        "reduccion_daño": float(mensaje.get("reduccion_daño", 0))
+                    }
+                except (KeyError, TypeError, ValueError):
+                    pass
+            elif tipo == "jugador_desconectado":
+                if mensaje["id"] in self.otros_jugadores:
+                    del self.otros_jugadores[mensaje["id"]]
+            elif tipo == "actualizacion_posicion":
+                if mensaje["id"] in self.otros_jugadores:
+                    try:
+                        self.otros_jugadores[mensaje["id"]]["pos"] = [
+                            float(mensaje["pos"][0]),
+                            float(mensaje["pos"][1])
+                        ]
+                    except (KeyError, TypeError, ValueError):
+                        pass
+            elif tipo == "nueva_oleada":
+                try:
+                    self.oleadas["contador_oleadas"] = int(mensaje.get("contador", 0))
+                    self.oleadas["tiempo_juego"] = float(mensaje.get("tiempo", 0))
+                    
+                    # Limpiar minions existentes y generar nuevos
+                    self.minions["aliados"] = []
+                    self.minions["enemigos"] = []
+                    
+                    # Generar oleadas locales con estructura válida
+                    self.minions["aliados"].extend(self.generar_oleada("aliados"))
+                    self.minions["enemigos"].extend(self.generar_oleada("enemigos"))
+                except (KeyError, TypeError, ValueError):
+                    pass
+        except Exception as e:
+            print(f"Error procesando mensaje: {e}")
 
     def enviar_mensaje(self, tipo, contenido):
         """Enviar mensaje al servidor"""

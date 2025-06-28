@@ -1,4 +1,4 @@
-# servidor.py - Servidor para el juego multijugador
+# servidor.py - Servidor para el juego multijugador (versión completa)
 import socket
 import json
 import threading
@@ -12,13 +12,83 @@ class Servidor:
         self.server = None
         self.clientes = {}
         self.lock = threading.Lock()
-        self.oleadas = {
-            "tiempo_ultima_oleada": 0,
-            "intervalo": 30,  # segundos
-            "contador_oleadas": 0,
-            "tiempo_juego": 0,  # en segundos
-            "primer_oleada": False
+        
+        # Estado completo del juego compartido
+        self.estado_juego = {
+            "mapa": {
+                "rutas": [
+                    # Ruta azul (inferior)
+                    {"color": [0, 0, 255], "puntos": [(49, 500), (751, 500)]},
+                    # Ruta roja (superior)
+                    {"color": [255, 0, 0], "puntos": [(49, 100), (751, 100)]},
+                    # Ruta izquierda (vertical)
+                    {"color": [255, 0, 0], "puntos": [(49, 100), (49, 500)]},
+                    # Ruta derecha (vertical)
+                    {"color": [0, 0, 255], "puntos": [(751, 100), (751, 500)]},
+                    # Ruta diagonal amarilla
+                    {"color": [255, 255, 0], "puntos": [(49, 500), (751, 100)]}
+                ],
+                "scroll_y": 0
+            },
+            "estructuras": {
+                "torres": {
+                    "aliadas": [
+                        {"pos": [200, 480], "vida": 2000, "destruida": False, "ruta": 1, "orden": 3},
+                        {"pos": [400, 480], "vida": 2000, "destruida": False, "ruta": 1, "orden": 2},
+                        {"pos": [600, 480], "vida": 2000, "destruida": False, "ruta": 1, "orden": 1},
+                        {"pos": [50, 170], "vida": 2000, "destruida": False, "ruta": 2, "orden": 1},
+                        {"pos": [50, 300], "vida": 2000, "destruida": False, "ruta": 2, "orden": 2},
+                        {"pos": [50, 400], "vida": 2000, "destruida": False, "ruta": 2, "orden": 3},
+                        {"pos": [160, 415], "vida": 2000, "destruida": False, "ruta": 4, "orden": 3},
+                        {"pos": [275, 355], "vida": 2000, "destruida": False, "ruta": 4, "orden": 2},
+                        {"pos": [375, 300], "vida": 2000, "destruida": False, "ruta": 4, "orden": 1}
+                    ],
+                    "enemigas": [
+                        {"pos": [200, 80], "vida": 2000, "destruida": False, "ruta": 0, "orden": 1},
+                        {"pos": [400, 80], "vida": 2000, "destruida": False, "ruta": 0, "orden": 2},
+                        {"pos": [600, 80], "vida": 2000, "destruida": False, "ruta": 0, "orden": 3},
+                        {"pos": [750, 170], "vida": 2000, "destruida": False, "ruta": 3, "orden": 3},
+                        {"pos": [750, 300], "vida": 2000, "destruida": False, "ruta": 3, "orden": 2},
+                        {"pos": [750, 400], "vida": 2000, "destruida": False, "ruta": 3, "orden": 1},
+                        {"pos": [495, 230], "vida": 2000, "destruida": False, "ruta": 0, "orden": 1},
+                        {"pos": [575, 180], "vida": 2000, "destruida": False, "ruta": 0, "orden": 2},
+                        {"pos": [655, 130], "vida": 2000, "destruida": False, "ruta": 0, "orden": 3}
+                    ]
+                },
+                "inhibidores": {
+                    "aliados": [
+                        {"pos": [150, 480], "vida": 2500, "destruido": False, "ruta": 1},
+                        {"pos": [50, 435], "vida": 2500, "destruido": False, "ruta": 2},
+                        {"pos": [140, 435], "vida": 2500, "destruido": False, "ruta": 4}
+                    ],
+                    "enemigos": [
+                        {"pos": [685, 120], "vida": 2500, "destruido": False, "ruta": 0},
+                        {"pos": [750, 145], "vida": 2500, "destruido": False, "ruta": 3},
+                        {"pos": [655, 80], "vida": 2500, "destruido": False, "ruta": 4}
+                    ]
+                },
+                "nexos": {
+                    "aliados": [
+                        {"pos": [40, 490], "vida": 5000, "destruido": False, "puede_atacar": False}
+                    ],
+                    "enemigos": [
+                        {"pos": [750, 70], "vida": 5000, "destruido": False, "puede_atacar": False}
+                    ]
+                }
+            },
+            "minions": {
+                "aliados": [],
+                "enemigos": []
+            },
+            "oleadas": {
+                "tiempo_ultima_oleada": 0,
+                "intervalo": 30,
+                "contador_oleadas": 0,
+                "tiempo_juego": 0,
+                "primer_oleada": False
+            }
         }
+
         self.iniciar_servidor()
 
     def iniciar_servidor(self):
@@ -42,27 +112,86 @@ class Servidor:
         while True:
             time.sleep(1)  # Actualizar cada segundo
             with self.lock:
-                self.oleadas["tiempo_juego"] += 1
+                self.estado_juego["oleadas"]["tiempo_juego"] += 1
+                tiempo = self.estado_juego["oleadas"]["tiempo_juego"]
 
                 # Primera oleada a los 65 segundos (1:05)
-                if not self.oleadas["primer_oleada"] and self.oleadas["tiempo_juego"] >= 65:
-                    self.oleadas["primer_oleada"] = True
-                    self.oleadas["tiempo_ultima_oleada"] = self.oleadas["tiempo_juego"]
-                    self.oleadas["contador_oleadas"] += 1
+                if not self.estado_juego["oleadas"]["primer_oleada"] and tiempo >= 65:
+                    self.estado_juego["oleadas"]["primer_oleada"] = True
+                    self.estado_juego["oleadas"]["tiempo_ultima_oleada"] = tiempo
+                    self.estado_juego["oleadas"]["contador_oleadas"] += 1
+                    self.generar_oleada("aliados")
+                    self.generar_oleada("enemigos")
                     self.enviar_a_todos("nueva_oleada", {
-                        "contador": self.oleadas["contador_oleadas"],
-                        "tiempo": self.oleadas["tiempo_juego"]
+                        "contador": self.estado_juego["oleadas"]["contador_oleadas"],
+                        "tiempo": tiempo
                     })
                 
                 # Oleadas posteriores cada 30 segundos
-                tiempo_desde_ultima = self.oleadas["tiempo_juego"] - self.oleadas["tiempo_ultima_oleada"]
-                if tiempo_desde_ultima >= self.oleadas["intervalo"] and self.oleadas["primer_oleada"]:
-                    self.oleadas["tiempo_ultima_oleada"] = self.oleadas["tiempo_juego"]
-                    self.oleadas["contador_oleadas"] += 1
+                tiempo_desde_ultima = tiempo - self.estado_juego["oleadas"]["tiempo_ultima_oleada"]
+                if (tiempo_desde_ultima >= self.estado_juego["oleadas"]["intervalo"] and 
+                    self.estado_juego["oleadas"]["primer_oleada"]):
+                    self.estado_juego["oleadas"]["tiempo_ultima_oleada"] = tiempo
+                    self.estado_juego["oleadas"]["contador_oleadas"] += 1
+                    self.generar_oleada("aliados")
+                    self.generar_oleada("enemigos")
                     self.enviar_a_todos("nueva_oleada", {
-                        "contador": self.oleadas["contador_oleadas"],
-                        "tiempo": self.oleadas["tiempo_juego"]
+                        "contador": self.estado_juego["oleadas"]["contador_oleadas"],
+                        "tiempo": tiempo
                     })
+
+                # Enviar estado completo cada 5 segundos
+                if tiempo % 5 == 0:
+                    self.enviar_a_todos("estado_juego", self.estado_juego)
+
+    def generar_oleada(self, equipo):
+        """Genera una oleada de minions para un equipo"""
+        tipos_minions = ["melee", "caster", "siege"]
+        punto_inicio = [40, 490] if equipo == "aliados" else [750, 70]
+        destino_final = [750, 70] if equipo == "aliados" else [40, 490]
+
+        for ruta_id in range(3):  # 3 rutas diferentes
+            for tipo in tipos_minions:
+                stats = {
+                    "melee": {"vida": 100, "daño": 15, "velocidad": 2, "rango_ataque": 40},
+                    "caster": {"vida": 60, "daño": 25, "velocidad": 1.8, "rango_ataque": 80},
+                    "siege": {"vida": 150, "daño": 40, "velocidad": 1.5, "rango_ataque": 120}
+                }.get(tipo, {"vida": 100, "daño": 15, "velocidad": 2, "rango_ataque": 40})
+
+                minion = {
+                    "tipo": tipo,
+                    "vida": stats["vida"],
+                    "vida_max": stats["vida"],
+                    "daño": stats["daño"],
+                    "velocidad": stats["velocidad"],
+                    "ruta_id": f"{equipo}_ruta_{ruta_id}",
+                    "pos": list(punto_inicio),
+                    "objetivo": None,
+                    "equipo": equipo,
+                    "rango_ataque": stats["rango_ataque"],
+                    "destino": destino_final,
+                    "puntos_ruta": self.generar_ruta_minion(equipo, ruta_id),
+                    "indice_punto_actual": 0,
+                    "reduccion_daño": 0
+                }
+                self.estado_juego["minions"][equipo].append(minion)
+
+    def generar_ruta_minion(self, equipo, ruta_id):
+        """Genera los puntos de ruta para los minions según el equipo y ruta"""
+        if equipo == "aliados":
+            if ruta_id == 0:  # Ruta inferior -> derecha -> base enemiga
+                return [(49, 500), (751, 500), (751, 100)]
+            elif ruta_id == 1:  # Ruta diagonal directa
+                return [(49, 500), (751, 100)]
+            else:  # Ruta izquierda -> superior -> base enemiga
+                return [(49, 500), (49, 100), (751, 100)]
+        else:  # enemigos
+            if ruta_id == 0:  # Ruta superior -> izquierda -> base aliada
+                return [(751, 100), (49, 100), (49, 500)]
+            elif ruta_id == 1:  # Ruta diagonal directa
+                return [(751, 100), (49, 500)]
+            else:  # Ruta derecha -> inferior -> base aliada
+                return [(751, 100), (751, 500), (49, 500)]
 
     def manejar_cliente(self, cliente):
         """Maneja la comunicación con un cliente conectado"""
@@ -101,14 +230,15 @@ class Servidor:
                                     "reduccion_daño": 0
                                 }
                             
-                            # Enviar bienvenida con ID asignado
+                            # Enviar bienvenida con ID asignado y estado completo
                             self.enviar_mensaje(cliente, "bienvenida", {
                                 "id": id_cliente,
                                 "mensaje": "Bienvenido al servidor",
                                 "jugadores": self.obtener_datos_jugadores(),
+                                "estado_juego": self.estado_juego,
                                 "oleada": {
-                                    "contador": self.oleadas["contador_oleadas"],
-                                    "tiempo": self.oleadas["tiempo_juego"]
+                                    "contador": self.estado_juego["oleadas"]["contador_oleadas"],
+                                    "tiempo": self.estado_juego["oleadas"]["tiempo_juego"]
                                 }
                             })
 
@@ -149,6 +279,19 @@ class Servidor:
                                 "id": id_cliente,
                                 "pos": mensaje.get("pos", [400, 300])
                             })
+
+                        elif tipo == "estructura_destruida" and id_cliente:
+                            with self.lock:
+                                tipo_estructura = mensaje.get("tipo")
+                                equipo = mensaje.get("equipo")
+                                indice = mensaje.get("indice")
+                                
+                                if (tipo_estructura in self.estado_juego["estructuras"] and 
+                                    equipo in self.estado_juego["estructuras"][tipo_estructura] and
+                                    indice < len(self.estado_juego["estructuras"][tipo_estructura][equipo])):
+                                    
+                                    self.estado_juego["estructuras"][tipo_estructura][equipo][indice]["destruida"] = True
+                                    self.enviar_a_todos("estructura_destruida", mensaje)
 
                         elif tipo == "desconectar" and id_cliente:
                             with self.lock:

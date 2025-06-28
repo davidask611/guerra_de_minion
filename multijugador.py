@@ -15,16 +15,19 @@ class Juego:
         self.pantalla = pygame.display.set_mode((self.ANCHO, self.ALTO))
         pygame.display.set_caption("Mundo Infinito Multijugador")
         self.reloj = pygame.time.Clock()
-        self.estado = "menu"  # menu, seleccion, juego
+        self.estado = "menu"  # menu, seleccion, juego, fin
+        self.mensaje_fin = ""
         self.jugador = {
             "nombre": "",
             "personaje": None,
             "vida": 100,
+            "vida_max": 100,
             "pos": [self.ANCHO // 2, self.ALTO - 100],
             "velocidad": 5,
             "daño": 20,
             "nivel": 1,
-            "experiencia": 0
+            "experiencia": 0,
+            "reduccion_daño": 0
         }
         self.otros_jugadores = {}
         self.socket_cliente = None
@@ -37,6 +40,23 @@ class Juego:
             "velocidad_scroll": 3,
             "rutas": []  # Almacenará las rutas fijas
         }
+        
+        # Sistema de estructuras
+        self.estructuras = {
+            "torres": {
+                "aliadas": [],
+                "enemigas": []
+            },
+            "inhibidores": {
+                "aliados": [],
+                "enemigos": []
+            },
+            "nexos": {
+                "aliados": [],
+                "enemigos": []
+            }
+        }
+        
         self.crear_rutas_fijas()  # Crear las rutas
         self.configurar_torres()  # Configurar las torres
         self.configurar_inhibidores()  # Configurar los inhibidores
@@ -156,78 +176,90 @@ class Juego:
             sys.exit()
 
     def configurar_torres(self):
-        """Configura las posiciones de las torres en las rutas con coordenadas exactas"""
-        self.torres = {
-            "aliadas": [],
-            "enemigas": []
-        }
+        """Configura las torres con vida, daño y reducción de daño"""
+        self.estructuras["torres"]["aliadas"] = [
+            # Ruta roja (inferior) - 3 torres aliadas (orden invertido 3,2,1)
+            {"pos": [200, 480], "vida": 2000, "vida_max": 2000, "daño": 15, "daño_base": 15, 
+             "reduccion_daño": 20, "rango": 200, "ruta": 1, "orden": 3, "destruida": False, "ultimo_ataque": 0},
+            {"pos": [400, 480], "vida": 2000, "vida_max": 2000, "daño": 10, "daño_base": 10, 
+             "reduccion_daño": 10, "rango": 200, "ruta": 1, "orden": 2, "destruida": False, "ultimo_ataque": 0},
+            {"pos": [600, 480], "vida": 2000, "vida_max": 2000, "daño": 5, "daño_base": 5, 
+             "reduccion_daño": 0, "rango": 200, "ruta": 1, "orden": 1, "destruida": False, "ultimo_ataque": 0},
+            
+            # Ruta blanca izquierda - 3 torres aliadas (orden normal)
+            {"pos": [50, 170], "vida": 2000, "vida_max": 2000, "daño": 5, "daño_base": 5, 
+             "reduccion_daño": 0, "rango": 200, "ruta": 2, "orden": 1, "destruida": False, "ultimo_ataque": 0},
+            {"pos": [50, 300], "vida": 2000, "vida_max": 2000, "daño": 10, "daño_base": 10, 
+             "reduccion_daño": 10, "rango": 200, "ruta": 2, "orden": 2, "destruida": False, "ultimo_ataque": 0},
+            {"pos": [50, 400], "vida": 2000, "vida_max": 2000, "daño": 15, "daño_base": 15, 
+             "reduccion_daño": 20, "rango": 200, "ruta": 2, "orden": 3, "destruida": False, "ultimo_ataque": 0},
+            
+            # Ruta amarilla - 3 torres aliadas (orden invertido 3,2,1)
+            {"pos": [160, 415], "vida": 2000, "vida_max": 2000, "daño": 15, "daño_base": 15, 
+             "reduccion_daño": 20, "rango": 200, "ruta": 4, "orden": 3, "destruida": False, "ultimo_ataque": 0},
+            {"pos": [275, 355], "vida": 2000, "vida_max": 2000, "daño": 10, "daño_base": 10, 
+             "reduccion_daño": 10, "rango": 200, "ruta": 4, "orden": 2, "destruida": False, "ultimo_ataque": 0},
+            {"pos": [375, 300], "vida": 2000, "vida_max": 2000, "daño": 5, "daño_base": 5, 
+             "reduccion_daño": 0, "rango": 200, "ruta": 4, "orden": 1, "destruida": False, "ultimo_ataque": 0}
+        ]
         
-        # Ruta azul (superior) - 3 torres enemigas
-        self.torres["enemigas"].extend([
-            (200, 80),  # Torre 1 ruta azul
-            (400, 80),  # Torre 2 ruta azul
-            (600, 80)   # Torre 3 ruta azul
-        ])
-        
-        # Ruta roja (inferior) - 3 torres aliadas
-        self.torres["aliadas"].extend([
-            (200, 480),  # Torre 1 ruta roja
-            (400, 480),  # Torre 2 ruta roja
-            (600, 480)   # Torre 3 ruta roja
-        ])
-        
-        # Ruta blanca izquierda - 3 torres aliadas
-        self.torres["aliadas"].extend([
-            (50, 170),   # Torre superior
-            (50, 300),   # Torre media
-            (50, 400)    # Torre inferior
-        ])
-        
-        # Ruta blanca derecha - 3 torres enemigas
-        self.torres["enemigas"].extend([
-            (750, 170),  # Torre superior
-            (750, 300),  # Torre media
-            (750, 400)   # Torre inferior
-        ])
-        
-        # Ruta amarilla (diagonal) - 3 aliadas y 3 enemigas
-        self.torres["aliadas"].extend([
-            (160, 415),  # Torre 1 aliada diagonal
-            (275, 355),  # Torre 2 aliada diagonal
-            (375, 300)   # Torre 3 aliada diagonal
-        ])
-        
-        self.torres["enemigas"].extend([
-            (495, 230),  # Torre 1 enemiga diagonal
-            (575, 180),  # Torre 2 enemiga diagonal
-            (655, 130)   # Torre 3 enemiga diagonal
-        ])
+        self.estructuras["torres"]["enemigas"] = [
+            # Ruta azul (superior) - 3 torres enemigas (orden normal)
+            {"pos": [200, 80], "vida": 2000, "vida_max": 2000, "daño": 5, "daño_base": 5, 
+             "reduccion_daño": 0, "rango": 200, "ruta": 0, "orden": 1, "destruida": False, "ultimo_ataque": 0},
+            {"pos": [400, 80], "vida": 2000, "vida_max": 2000, "daño": 10, "daño_base": 10, 
+             "reduccion_daño": 10, "rango": 200, "ruta": 0, "orden": 2, "destruida": False, "ultimo_ataque": 0},
+            {"pos": [600, 80], "vida": 2000, "vida_max": 2000, "daño": 15, "daño_base": 15, 
+             "reduccion_daño": 20, "rango": 200, "ruta": 0, "orden": 3, "destruida": False, "ultimo_ataque": 0},
+            
+            # Ruta blanca derecha - 3 torres enemigas (orden invertido 3,2,1)
+            {"pos": [750, 170], "vida": 2000, "vida_max": 2000, "daño": 15, "daño_base": 15, 
+             "reduccion_daño": 20, "rango": 200, "ruta": 3, "orden": 3, "destruida": False, "ultimo_ataque": 0},
+            {"pos": [750, 300], "vida": 2000, "vida_max": 2000, "daño": 10, "daño_base": 10, 
+             "reduccion_daño": 10, "rango": 200, "ruta": 3, "orden": 2, "destruida": False, "ultimo_ataque": 0},
+            {"pos": [750, 400], "vida": 2000, "vida_max": 2000, "daño": 5, "daño_base": 5, 
+             "reduccion_daño": 0, "rango": 200, "ruta": 3, "orden": 1, "destruida": False, "ultimo_ataque": 0},
+            
+            # Ruta amarilla - 3 torres enemigas
+            {"pos": [495, 230], "vida": 2000, "vida_max": 2000, "daño": 5, "daño_base": 5, 
+             "reduccion_daño": 0, "rango": 200, "ruta": 0, "orden": 1, "destruida": False, "ultimo_ataque": 0},
+            {"pos": [575, 180], "vida": 2000, "vida_max": 2000, "daño": 10, "daño_base": 10, 
+             "reduccion_daño": 10, "rango": 200, "ruta": 0, "orden": 2, "destruida": False, "ultimo_ataque": 0},
+            {"pos": [655, 130], "vida": 2000, "vida_max": 2000, "daño": 15, "daño_base": 15, 
+             "reduccion_daño": 20, "rango": 200, "ruta": 0, "orden": 3, "destruida": False, "ultimo_ataque": 0},
+        ]
 
     def configurar_inhibidores(self):
-        """Configura las posiciones de los inhibidores en las rutas"""
-        self.inhibidores = {
-            "aliados": [
-                (150, 480),  # Inhibidor aliado 1
-                (50, 435),   # Inhibidor aliado 2
-                (140, 435)   # Inhibidor aliado 3
-            ],
-            "enemigos": [
-                (685, 120),  # Inhibidor enemigo 1
-                (750, 145),  # Inhibidor enemigo 2
-                (655, 80)    # Inhibidor enemigo 3
-            ]
-        }
+        """Configura los inhibidores con vida y temporizador de reconstrucción"""
+        self.estructuras["inhibidores"]["aliados"] = [
+            {"pos": [150, 480], "vida": 2500, "vida_max": 2500, "daño": 0, "rango": 0, 
+             "ruta": 1, "destruido": False, "tiempo_reconstruccion": 0},
+            {"pos": [50, 435], "vida": 2500, "vida_max": 2500, "daño": 0, "rango": 0, 
+             "ruta": 2, "destruido": False, "tiempo_reconstruccion": 0},
+            {"pos": [140, 435], "vida": 2500, "vida_max": 2500, "daño": 0, "rango": 0, 
+             "ruta": 4, "destruido": False, "tiempo_reconstruccion": 0}
+        ]
+        
+        self.estructuras["inhibidores"]["enemigos"] = [
+            {"pos": [685, 120], "vida": 2500, "vida_max": 2500, "daño": 0, "rango": 0, 
+             "ruta": 0, "destruido": False, "tiempo_reconstruccion": 0},
+            {"pos": [750, 145], "vida": 2500, "vida_max": 2500, "daño": 0, "rango": 0, 
+             "ruta": 3, "destruido": False, "tiempo_reconstruccion": 0},
+            {"pos": [655, 80], "vida": 2500, "vida_max": 2500, "daño": 0, "rango": 0, 
+             "ruta": 4, "destruido": False, "tiempo_reconstruccion": 0}
+        ]
 
     def configurar_nexos(self):
-        """Configura las posiciones de los nexos en las rutas"""
-        self.nexos = {
-            "aliados": [
-                (40, 490)  # Nexo aliado (base aliada)
-            ],
-            "enemigos": [
-                (750, 70)  # Nexo enemigo (base enemiga)
-            ]
-        }
+        """Configura los nexos con vida y capacidad de ataque"""
+        self.estructuras["nexos"]["aliados"] = [
+            {"pos": [40, 490], "vida": 5000, "vida_max": 5000, "daño": 30, "rango": 250, 
+             "puede_atacar": False, "destruido": False}
+        ]
+        
+        self.estructuras["nexos"]["enemigos"] = [
+            {"pos": [750, 70], "vida": 5000, "vida_max": 5000, "daño": 30, "rango": 250, 
+             "puede_atacar": False, "destruido": False}
+        ]
 
     def crear_rutas_fijas(self):
         """Crea las rutas fijas en el mapa"""
@@ -302,28 +334,77 @@ class Juego:
                 )
 
     def dibujar_torres(self):
-        """Dibuja todas las torres en el mapa"""
-        for x, y in self.torres["aliadas"]:
-            self.pantalla.blit(self.torre_aliada_img, (x - 30, y - 30))
-        
-        for x, y in self.torres["enemigas"]:
-            self.pantalla.blit(self.torre_enemiga_img, (x - 30, y - 30))
+        """Dibuja todas las torres con sus barras de vida"""
+        for equipo in ["aliadas", "enemigas"]:
+            for torre in self.estructuras["torres"][equipo]:
+                if torre["destruida"]:
+                    continue
+                    
+                # Dibujar torre
+                img = self.torre_aliada_img if equipo == "aliadas" else self.torre_enemiga_img
+                self.pantalla.blit(img, (torre["pos"][0] - 30, torre["pos"][1] - 30))
+                
+                # Barra de vida
+                vida_width = 60
+                vida_actual = max(0, (torre["vida"] / torre["vida_max"])) * vida_width
+                pygame.draw.rect(self.pantalla, (100, 0, 0), 
+                                (torre["pos"][0] - vida_width//2, torre["pos"][1] - 40, vida_width, 5))
+                pygame.draw.rect(self.pantalla, (0, 255, 0), 
+                                (torre["pos"][0] - vida_width//2, torre["pos"][1] - 40, vida_actual, 5))
+                
+                # Indicador de orden de torre
+                orden_texto = self.fuente_pequena.render(str(torre["orden"]), True, (255, 255, 255))
+                self.pantalla.blit(orden_texto, (torre["pos"][0] - orden_texto.get_width()//2, 
+                                               torre["pos"][1] - orden_texto.get_height()//2))
 
     def dibujar_inhibidores(self):
-        """Dibuja todos los inhibidores en el mapa"""
-        for x, y in self.inhibidores["aliados"]:
-            self.pantalla.blit(self.inhibidor_aliado_img, (x - 25, y - 25))
-        
-        for x, y in self.inhibidores["enemigos"]:
-            self.pantalla.blit(self.inhibidor_enemigo_img, (x - 25, y - 25))
+        """Dibuja todos los inhibidores con sus barras de vida"""
+        for equipo in ["aliados", "enemigos"]:
+            for inhib in self.estructuras["inhibidores"][equipo]:
+                if inhib["destruido"]:
+                    # Mostrar temporizador de reconstrucción
+                    tiempo_restante = max(0, 60 - inhib["tiempo_reconstruccion"])
+                    tiempo_texto = self.fuente_pequena.render(f"{int(tiempo_restante)}", True, (255, 255, 255))
+                    self.pantalla.blit(tiempo_texto, (inhib["pos"][0] - tiempo_texto.get_width()//2, 
+                                     inhib["pos"][1] - tiempo_texto.get_height()//2))
+                    continue
+                    
+                # Dibujar inhibidor
+                img = self.inhibidor_aliado_img if equipo == "aliados" else self.inhibidor_enemigo_img
+                self.pantalla.blit(img, (inhib["pos"][0] - 25, inhib["pos"][1] - 25))
+                
+                # Barra de vida
+                vida_width = 50
+                vida_actual = max(0, (inhib["vida"] / inhib["vida_max"])) * vida_width
+                pygame.draw.rect(self.pantalla, (100, 0, 0), 
+                                (inhib["pos"][0] - vida_width//2, inhib["pos"][1] - 35, vida_width, 5))
+                pygame.draw.rect(self.pantalla, (0, 255, 0), 
+                                (inhib["pos"][0] - vida_width//2, inhib["pos"][1] - 35, vida_actual, 5))
 
     def dibujar_nexos(self):
-        """Dibuja todos los nexos en el mapa"""
-        for x, y in self.nexos["aliados"]:
-            self.pantalla.blit(self.nexo_aliado_img, (x - 40, y - 40))
-        
-        for x, y in self.nexos["enemigos"]:
-            self.pantalla.blit(self.nexo_enemigo_img, (x - 40, y - 40))
+        """Dibuja todos los nexos con sus barras de vida"""
+        for equipo in ["aliados", "enemigos"]:
+            for nexo in self.estructuras["nexos"][equipo]:
+                if nexo["destruido"]:
+                    continue
+                    
+                # Dibujar nexo
+                img = self.nexo_aliado_img if equipo == "aliados" else self.nexo_enemigo_img
+                self.pantalla.blit(img, (nexo["pos"][0] - 40, nexo["pos"][1] - 40))
+                
+                # Barra de vida
+                vida_width = 80
+                vida_actual = max(0, (nexo["vida"] / nexo["vida_max"])) * vida_width
+                pygame.draw.rect(self.pantalla, (100, 0, 0), 
+                                (nexo["pos"][0] - vida_width//2, nexo["pos"][1] - 50, vida_width, 8))
+                pygame.draw.rect(self.pantalla, (0, 255, 0), 
+                                (nexo["pos"][0] - vida_width//2, nexo["pos"][1] - 50, vida_actual, 8))
+                
+                # Indicador de si puede atacar
+                if nexo["puede_atacar"]:
+                    ataque_texto = self.fuente_pequena.render("ATK", True, (255, 0, 0))
+                    self.pantalla.blit(ataque_texto, (nexo["pos"][0] - ataque_texto.get_width()//2, 
+                                                   nexo["pos"][1] + 30))
 
     def dibujar_jugador(self):
         """Dibuja al jugador principal"""
@@ -346,7 +427,7 @@ class Juego:
         
         # Barra de vida
         vida_width = 70
-        vida_actual = max(0, (self.jugador["vida"] / 100)) * vida_width
+        vida_actual = max(0, (self.jugador["vida"] / self.jugador["vida_max"])) * vida_width
         pygame.draw.rect(self.pantalla, (255, 0, 0), 
                         (self.jugador["pos"][0] - vida_width//2, self.jugador["pos"][1] - 50, vida_width, 5))
         pygame.draw.rect(self.pantalla, (0, 255, 0), 
@@ -374,30 +455,26 @@ class Juego:
             
             # Barra de vida
             vida_width = 70
-            vida_actual = max(0, (datos["vida"] / 100) * vida_width)
+            vida_actual = max(0, (datos["vida"] / datos["vida_max"])) * vida_width
             pygame.draw.rect(self.pantalla, (255, 0, 0), 
                             (datos["pos"][0] - vida_width//2, datos["pos"][1] - 50, vida_width, 5))
             pygame.draw.rect(self.pantalla, (0, 255, 0), 
                             (datos["pos"][0] - vida_width//2, datos["pos"][1] - 50, vida_actual, 5))
 
     def generar_oleada(self, equipo):
-        """Genera una oleada de minions (melee, caster, cañón) por ruta hacia el nexo enemigo"""
+        """Genera una oleada completa de minions con todos los atributos necesarios"""
         oleada = []
-        tipos_minions = ["melee", "caster", "siege"]  # Tipos de minions
+        tipos_minions = ["melee", "caster", "siege"]
         
-        # Rutas según el equipo (aliados: roja, blanca izq, amarilla | enemigos: azul, blanca der, amarilla)
-        if equipo == "aliados":
-            rutas = [1, 2, 4]  # Índices de rutas aliadas
-            destino = self.nexos["enemigos"][0]  # Nexo enemigo
-        else:
-            rutas = [0, 3, 4]  # Índices de rutas enemigas
-            destino = self.nexos["aliados"][0]  # Nexo aliado
+        # Determinar rutas según el equipo
+        rutas = [1, 2, 4] if equipo == "aliados" else [0, 3, 4]
         
         for ruta_idx in rutas:
             ruta = self.mapa["rutas"][ruta_idx]
+            destino = self.estructuras["nexos"]["enemigos"][0]["pos"] if equipo == "aliados" else self.estructuras["nexos"]["aliados"][0]["pos"]
             
-            # Generar 1 minion de cada tipo por ruta
             for tipo in tipos_minions:
+                # Stats base para cada tipo
                 stats = {
                     "melee": {"vida": 100, "daño": 15, "velocidad": 2, "rango_ataque": 40},
                     "caster": {"vida": 60, "daño": 25, "velocidad": 1.8, "rango_ataque": 80},
@@ -407,15 +484,20 @@ class Juego:
                 oleada.append({
                     "tipo": tipo,
                     "vida": stats["vida"],
+                    "vida_max": stats["vida"],
                     "daño": stats["daño"],
                     "velocidad": stats["velocidad"],
                     "ruta_actual": ruta_idx,
-                    "pos": list(self.nexos["enemigos"][0] if equipo == "enemigos" else self.nexos["aliados"][0]),
+                    "pos": list(self.estructuras["nexos"]["enemigos"][0]["pos"] if equipo == "enemigos" 
+                          else self.estructuras["nexos"]["aliados"][0]["pos"]),
                     "objetivo": None,
                     "equipo": equipo,
                     "rango_ataque": stats["rango_ataque"],
                     "destino": destino,
-                    "puntos_ruta": ruta["puntos"].copy()  # Copia de la ruta asignada
+                    "puntos_ruta": ruta["puntos"].copy(),
+                    "reduccion_daño": 0,
+                    "ultimo_ataque": 0,  # Para el delay de ataque
+                    "tiempo_creacion": self.oleadas["tiempo_juego"]  # Para seguimiento
                 })
         
         return oleada
@@ -539,21 +621,297 @@ class Juego:
                             self.minions[equipo_opuesto].remove(otro_minion)
                         break
 
+                # --- Ataque a estructuras ---
+                self.verificar_ataque(minion)
+
+    def verificar_torres_ruta_destruidas(self, ruta, equipo):
+        """Verifica si todas las torres de una ruta están destruidas"""
+        torres_ruta = [t for t in self.estructuras["torres"][equipo] if t["ruta"] == ruta]
+        return all(t["destruida"] for t in torres_ruta)
+
     def verificar_ataque(self, minion):
-        """Verifica si el minion está en rango de ataque de una estructura enemiga"""
+        """Verifica objetivos de ataque para minions con la nueva lógica completa"""
+        ruta_actual = minion["ruta_actual"]
+        equipo = minion["equipo"]
         estructuras_enemigas = []
-        if minion["equipo"] == "aliados":
-            estructuras_enemigas = self.torres["enemigas"] + self.inhibidores["enemigos"] + self.nexos["enemigos"]
+        
+        # Determinar estructuras enemigas según el equipo
+        if equipo == "aliados":
+            torres_enemigas = self.estructuras["torres"]["enemigas"]
+            inhibidores_enemigos = self.estructuras["inhibidores"]["enemigos"]
+            nexo_enemigo = self.estructuras["nexos"]["enemigos"]
         else:
-            estructuras_enemigas = self.torres["aliadas"] + self.inhibidores["aliados"] + self.nexos["aliados"]
+            torres_enemigas = self.estructuras["torres"]["aliadas"]
+            inhibidores_enemigos = self.estructuras["inhibidores"]["aliados"]
+            nexo_enemigo = self.estructuras["nexos"]["aliados"]
+    
+        # 1. Verificar torres en su ruta (ordenadas)
+        torres_ruta = [t for t in torres_enemigas 
+                      if t["ruta"] == ruta_actual and not t["destruida"]]
+        torres_ruta.sort(key=lambda x: x["orden"])
+        
+        if torres_ruta:
+            estructuras_enemigas.append(torres_ruta[0])
+        
+        # 2. Si no hay torres, ver inhibidor de su ruta
+        elif not torres_ruta:
+            inhibidor_ruta = next((i for i in inhibidores_enemigos 
+                                 if i["ruta"] == ruta_actual), None)
+            
+            if inhibidor_ruta and not inhibidor_ruta["destruido"]:
+                estructuras_enemigas.append(inhibidor_ruta)
+            # 3. Si inhibidor de su ruta está destruido, puede atacar nexo
+            elif inhibidor_ruta and inhibidor_ruta["destruido"] and nexo_enemigo:
+                if len(nexo_enemigo) > 0 and not nexo_enemigo[0]["destruido"]:
+                    estructuras_enemigas.append(nexo_enemigo[0])
+        
+        # Lógica de ataque con delay de 5 segundos
+        tiempo_actual = pygame.time.get_ticks() / 1000  # Convertir a segundos
+        
+        if 'ultimo_ataque' not in minion:
+            minion['ultimo_ataque'] = 0
         
         for estructura in estructuras_enemigas:
-            ex, ey = estructura
-            distancia = ((minion["pos"][0] - ex)**2 + (minion["pos"][1] - ey)**2)**0.5
-            if distancia < minion["rango_ataque"]:
+            # Calcular distancia al objetivo
+            ex, ey = estructura["pos"]
+            mx, my = minion["pos"]
+            distancia = ((mx - ex)**2 + (my - ey)**2)**0.5
+            
+            # Verificar si está en rango y ha pasado el delay
+            if distancia < minion["rango_ataque"] and tiempo_actual - minion['ultimo_ataque'] >= 5:
                 minion["objetivo"] = estructura
-                # Lógica de ataque (daño a la estructura)
-                break
+                
+                # Calcular daño aplicando reducción
+                reduccion = estructura.get("reduccion_daño", 0)
+                daño_reducido = minion["daño"] * (1 - reduccion / 100)
+                estructura["vida"] -= daño_reducido
+                
+                # Actualizar tiempo del último ataque
+                minion['ultimo_ataque'] = tiempo_actual
+                
+                # Verificar si la estructura fue destruida
+                if estructura["vida"] <= 0:
+                    self.procesar_destruccion(estructura, equipo)
+                
+                break  # Solo atacar un objetivo por frame
+
+    def procesar_destruccion(self, estructura, equipo_atacante):
+        """Procesa completamente la destrucción de estructuras y sus consecuencias"""
+        # Estructura es una torre
+        if "torres" in estructura:
+            estructura["destruida"] = True
+            estructura["vida"] = 0
+        
+        # Estructura es un inhibidor
+        elif "inhibidores" in estructura:
+            estructura["destruido"] = True
+            estructura["vida"] = 0
+            estructura["tiempo_reconstruccion"] = 0
+            
+            # Activar nexo correspondiente
+            if equipo_atacante == "aliados":
+                # Para cada nexo aliado, verificar si hay inhibidores enemigos destruidos
+                for nexo in self.estructuras["nexos"]["aliados"]:
+                    inhibidores_destruidos = [i for i in self.estructuras["inhibidores"]["enemigos"] 
+                                            if i["destruido"]]
+                    nexo["puede_atacar"] = len(inhibidores_destruidos) > 0
+            else:
+                # Para cada nexo enemigo, verificar si hay inhibidores aliados destruidos
+                for nexo in self.estructuras["nexos"]["enemigos"]:
+                    inhibidores_destruidos = [i for i in self.estructuras["inhibidores"]["aliados"] 
+                                            if i["destruido"]]
+                    nexo["puede_atacar"] = len(inhibidores_destruidos) > 0
+    
+        # Estructura es un nexo
+        elif "nexos" in estructura:
+            estructura["destruido"] = True
+            estructura["vida"] = 0
+            self.verificar_estado_juego()
+
+    def actualizar_inhibidores(self, dt):
+        """Actualiza el estado de los inhibidores y su reconstrucción"""
+        for equipo in ["aliados", "enemigos"]:
+            for inhib in self.estructuras["inhibidores"][equipo]:
+                if inhib["destruido"]:
+                    inhib["tiempo_reconstruccion"] += dt / 1000  # Convertir ms a segundos
+                    
+                    # Reconstruir después de 60 segundos
+                    if inhib["tiempo_reconstruccion"] >= 60:
+                        inhib["vida"] = inhib["vida_max"]
+                        inhib["destruido"] = False
+                        inhib["tiempo_reconstruccion"] = 0
+                        
+                        # Si es un inhibidor enemigo reconstruido, desactivar ataque del nexo aliado
+                        if equipo == "enemigos":
+                            for nexo in self.estructuras["nexos"]["aliados"]:
+                                nexo["puede_atacar"] = any(
+                                    i["destruido"] 
+                                    for i in self.estructuras["inhibidores"]["enemigos"]
+                                )
+                        else:
+                            for nexo in self.estructuras["nexos"]["enemigos"]:
+                                nexo["puede_atacar"] = any(
+                                    i["destruido"] 
+                                    for i in self.estructuras["inhibidores"]["aliados"]
+                                )
+
+    def actualizar_estructuras(self, dt):
+        """Actualización completa del estado de todas las estructuras"""
+        # Actualizar tiempo de reconstrucción de inhibidores
+        for equipo in ["aliados", "enemigos"]:
+            for inhib in self.estructuras["inhibidores"][equipo]:
+                if inhib["destruido"]:
+                    inhib["tiempo_reconstruccion"] += dt / 1000  # ms a segundos
+                    
+                    # Reconstruir después de 60 segundos
+                    if inhib["tiempo_reconstruccion"] >= 60:
+                        inhib["vida"] = inhib["vida_max"]
+                        inhib["destruido"] = False
+                        inhib["tiempo_reconstruccion"] = 0
+                        
+                        # Verificar si debemos desactivar el nexo opuesto
+                        equipo_opuesto = "enemigos" if equipo == "aliados" else "aliados"
+                        for nexo in self.estructuras["nexos"][equipo_opuesto]:
+                            # Verificar si quedan inhibidores destruidos
+                            inhibidores_destruidos = [i for i in self.estructuras["inhibidores"][equipo]
+                                            if i["destruido"]]
+                            nexo["puede_atacar"] = len(inhibidores_destruidos) > 0
+        
+        # Actualizar estado de ataque de los nexos (por si algún cambio no fue detectado)
+        for nexo in self.estructuras["nexos"]["aliados"]:
+            inhibidores_destruidos = [i for i in self.estructuras["inhibidores"]["enemigos"] 
+                                    if i["destruido"]]
+            nexo["puede_atacar"] = len(inhibidores_destruidos) > 0
+        
+        for nexo in self.estructuras["nexos"]["enemigos"]:
+            inhibidores_destruidos = [i for i in self.estructuras["inhibidores"]["aliados"] 
+                                    if i["destruido"]]
+            nexo["puede_atacar"] = len(inhibidores_destruidos) > 0
+        
+        # Actualizar cooldown de ataques de torres
+        tiempo_actual = self.oleadas["tiempo_juego"]
+        for equipo in ["aliadas", "enemigas"]:
+            for torre in self.estructuras["torres"][equipo]:
+                if not torre["destruida"] and tiempo_actual - torre["ultimo_ataque"] >= 10:
+                    torre["puede_atacar"] = True
+                else:
+                    torre["puede_atacar"] = False
+
+    def atacar_estructuras(self):
+        """Las estructuras atacan a los objetivos en su rango con cooldown"""
+        tiempo_actual = self.oleadas["tiempo_juego"]
+        
+        # Torres atacan
+        for equipo in ["aliadas", "enemigas"]:
+            for torre in self.estructuras["torres"][equipo]:
+                if torre["destruida"]:
+                    continue
+                    
+                # Verificar cooldown (10 segundos entre ataques)
+                if tiempo_actual - torre["ultimo_ataque"] < 10:
+                    continue
+                    
+                # Buscar objetivos (jugadores o minions enemigos)
+                objetivos = []
+                equipo_opuesto = "enemigos" if equipo == "aliadas" else "aliados"
+                
+                # Minions enemigos
+                for minion in self.minions[equipo_opuesto]:
+                    distancia = ((torre["pos"][0] - minion["pos"][0])**2 + 
+                               (torre["pos"][1] - minion["pos"][1])**2)**0.5
+                    if distancia <= torre["rango"]:
+                        objetivos.append(("minion", minion))
+                
+                # Jugadores enemigos
+                if equipo == "aliadas":
+                    for jugador_id, jugador in self.otros_jugadores.items():
+                        distancia = ((torre["pos"][0] - jugador["pos"][0])**2 + 
+                                   (torre["pos"][1] - jugador["pos"][1])**2)**0.5
+                        if distancia <= torre["rango"]:
+                            objetivos.append(("jugador", jugador))
+                else:
+                    distancia = ((torre["pos"][0] - self.jugador["pos"][0])**2 + 
+                               (torre["pos"][1] - self.jugador["pos"][1])**2)**0.5
+                    if distancia <= torre["rango"]:
+                        objetivos.append(("jugador", self.jugador))
+                
+                # Atacar al primer objetivo encontrado
+                if objetivos:
+                    tipo, objetivo = objetivos[0]
+                    daño_real = torre["daño"] * (1 - objetivo.get("reduccion_daño", 0) / 100)
+                    
+                    if tipo == "minion":
+                        objetivo["vida"] -= daño_real
+                        if objetivo["vida"] <= 0:
+                            self.minions[equipo_opuesto].remove(objetivo)
+                    else:  # jugador
+                        objetivo["vida"] -= daño_real
+                    
+                    # Actualizar tiempo del último ataque
+                    torre["ultimo_ataque"] = tiempo_actual
+        
+        # Nexos atacan (si pueden)
+        for equipo in ["aliados", "enemigos"]:
+            for nexo in self.estructuras["nexos"][equipo]:
+                if nexo["destruido"] or not nexo["puede_atacar"]:
+                    continue
+                    
+                # Buscar objetivos (igual que las torres)
+                objetivos = []
+                equipo_opuesto = "enemigos" if equipo == "aliados" else "aliados"
+                
+                # Minions enemigos
+                for minion in self.minions[equipo_opuesto]:
+                    distancia = ((nexo["pos"][0] - minion["pos"][0])**2 + 
+                               (nexo["pos"][1] - minion["pos"][1])**2)**0.5
+                    if distancia <= nexo["rango"]:
+                        objetivos.append(("minion", minion))
+                
+                # Jugadores enemigos
+                if equipo == "aliados":
+                    for jugador_id, jugador in self.otros_jugadores.items():
+                        distancia = ((nexo["pos"][0] - jugador["pos"][0])**2 + 
+                                   (nexo["pos"][1] - jugador["pos"][1])**2)**0.5
+                        if distancia <= nexo["rango"]:
+                            objetivos.append(("jugador", jugador))
+                else:
+                    distancia = ((nexo["pos"][0] - self.jugador["pos"][0])**2 + 
+                               (nexo["pos"][1] - self.jugador["pos"][1])**2)**0.5
+                    if distancia <= nexo["rango"]:
+                        objetivos.append(("jugador", self.jugador))
+                
+                # Atacar al primer objetivo encontrado
+                if objetivos:
+                    tipo, objetivo = objetivos[0]
+                    daño_real = nexo["daño"] * (1 - objetivo.get("reduccion_daño", 0) / 100)
+                    
+                    if tipo == "minion":
+                        objetivo["vida"] -= daño_real
+                        if objetivo["vida"] <= 0:
+                            self.minions[equipo_opuesto].remove(objetivo)
+                    else:  # jugador
+                        objetivo["vida"] -= daño_real
+
+    def verificar_estado_juego(self):
+        """Verificación completa del estado de victoria/derrota"""
+        # Verificar nexo aliado
+        for nexo in self.estructuras["nexos"]["aliados"]:
+            if nexo["destruido"]:
+                self.mostrar_mensaje_fin("¡Derrota! El nexo aliado fue destruido")
+                return True
+        
+        # Verificar nexo enemigo
+        for nexo in self.estructuras["nexos"]["enemigos"]:
+            if nexo["destruido"]:
+                self.mostrar_mensaje_fin("¡Victoria! El nexo enemigo fue destruido")
+                return True
+        
+        return False
+
+    def mostrar_mensaje_fin(self, mensaje):
+        """Muestra un mensaje de fin de juego"""
+        self.estado = "fin"
+        self.mensaje_fin = mensaje
 
     def dibujar_minions(self):
         """Dibuja minions con barras de vida y colores de equipo"""
@@ -565,14 +923,8 @@ class Juego:
                                         minion["pos"][1] - img.get_height()//2))
                 
                 # Barra de vida
-                vida_max = {
-                    "melee": 100,
-                    "caster": 60,
-                    "siege": 150
-                }[minion["tipo"]]
-                
                 vida_width = 40
-                vida_actual = max(0, (minion["vida"] / vida_max)) * vida_width
+                vida_actual = max(0, (minion["vida"] / minion["vida_max"])) * vida_width
                 
                 # Fondo rojo oscuro
                 pygame.draw.rect(self.pantalla, (100, 0, 0), 
@@ -824,6 +1176,13 @@ class Juego:
                   470 <= y <= 520 and self.jugador["nombre"] and self.jugador["personaje"]):
                 self.enviar_mensaje("nuevo_jugador", self.jugador)
                 self.estado = "juego"
+        
+        elif self.estado == "fin":
+            # Botón para volver al menú
+            if (self.ANCHO//2 - 100 <= x <= self.ANCHO//2 + 100 and 
+                self.ALTO//2 + 50 <= y <= self.ALTO//2 + 100):
+                self.estado = "menu"
+                self.reiniciar_juego()
 
     def conectar_servidor(self, ip_servidor, puerto):
         """Conectar al servidor de juego"""
@@ -890,6 +1249,10 @@ class Juego:
             except:
                 self.conectado = False
 
+    def reiniciar_juego(self):
+        """Reinicia el estado del juego para una nueva partida"""
+        self.__init__()
+
     def ejecutar(self):
         """Bucle principal del juego"""
         while True:
@@ -904,12 +1267,14 @@ class Juego:
                 
                 dt = self.reloj.get_time()  # Obtener tiempo desde el último frame
                 self.actualizar_oleadas(dt)
+                self.actualizar_estructuras(dt)
+                self.atacar_estructuras()
                 self.manejar_movimiento()
+                self.actualizar_minions()
                 self.dibujar_mapa()
                 self.dibujar_torres()
                 self.dibujar_inhibidores()
                 self.dibujar_nexos()
-                self.actualizar_minions()
                 self.dibujar_minions()
                 self.dibujar_jugador()
                 self.dibujar_otros_jugadores()
@@ -937,6 +1302,22 @@ class Juego:
                 if not self.conectado:
                     error_texto = self.fuente_normal.render("DESCONECTADO", True, (255, 0, 0))
                     self.pantalla.blit(error_texto, (self.ANCHO - error_texto.get_width() - 20, 20))
+                
+                # Verificar si el juego terminó
+                self.verificar_estado_juego()
+            
+            elif self.estado == "fin":
+                # Pantalla de fin de juego
+                self.pantalla.fill((0, 0, 0))
+                fin_texto = self.fuente_titulo.render(self.mensaje_fin, True, (255, 255, 255))
+                self.pantalla.blit(fin_texto, (self.ANCHO//2 - fin_texto.get_width()//2, 
+                                           self.ALTO//2 - fin_texto.get_height()//2))
+                
+                # Botón para volver al menú
+                pygame.draw.rect(self.pantalla, (70, 130, 180), (self.ANCHO//2 - 100, self.ALTO//2 + 50, 200, 50))
+                menu_texto = self.fuente_normal.render("Volver al menú", True, (255, 255, 255))
+                self.pantalla.blit(menu_texto, (self.ANCHO//2 - menu_texto.get_width()//2, 
+                                             self.ALTO//2 + 65))
             
             pygame.display.flip()
             self.reloj.tick(60)

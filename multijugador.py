@@ -506,21 +506,25 @@ class Juego:
 
     def verificar_ataque(self, minion):
         """Verifica objetivos de ataque para minions con la nueva lógica completa"""
-        ruta_actual = minion["ruta_actual"]
-        equipo = minion["equipo"]
-        estructuras_enemigas = []
-        if minion["equipo"] == "aliados":
-            # Acceder a las estructuras a través de self.estructuras
-            estructuras_enemigas = self.estructuras["torres"]["enemigas"] + self.estructuras["inhibidores"]["enemigos"] + self.estructuras["nexos"]["enemigos"]
-        else:
-            estructuras_enemigas = self.estructuras["torres"]["aliadas"] + self.estructuras["inhibidores"]["aliados"] + self.estructuras["nexos"]["aliados"]
+        # Obtener estructuras enemigas según el equipo del minion
+        equipo_opuesto = "enemigos" if minion["equipo"] == "aliados" else "aliados"
         
+        estructuras_enemigas = (
+            self.estructuras["torres"][equipo_opuesto + "s"] +  # "enemigas" o "aliadas"
+            self.estructuras["inhibidores"][equipo_opuesto] + 
+            self.estructuras["nexos"][equipo_opuesto]
+        )
+        
+        # Buscar la estructura más cercana en rango
         for estructura in estructuras_enemigas:
-            ex, ey = estructura["pos"]  # Acceder a la posición de la estructura
+            if estructura.get("destruida", False) or estructura.get("destruido", False):
+                continue  # Saltar estructuras destruidas
+                
+            ex, ey = estructura["pos"]
             distancia = ((minion["pos"][0] - ex)**2 + (minion["pos"][1] - ey)**2)**0.5
+            
             if distancia < minion["rango_ataque"]:
                 minion["objetivo"] = estructura
-                # Lógica de ataque (daño a la estructura)
                 break
     
     def calcular_velocidad(self, ruta, tiempo_objetivo_segundos):
@@ -622,23 +626,6 @@ class Juego:
         torres_ruta = [t for t in self.estructuras["torres"][equipo] if t["ruta"] == ruta]
         return all(t["destruida"] for t in torres_ruta)
 
-    def verificar_ataque(self, minion):
-        """Verifica objetivos de ataque para minions con la nueva lógica completa"""
-        ruta_actual = minion["ruta_actual"]
-        equipo = minion["equipo"]
-        estructuras_enemigas = []
-        if minion["equipo"] == "aliados":
-            estructuras_enemigas = self.torres["enemigas"] + self.inhibidores["enemigos"] + self.nexos["enemigos"]
-        else:
-            estructuras_enemigas = self.torres["aliadas"] + self.inhibidores["aliados"] + self.nexos["aliados"]
-        
-        for estructura in estructuras_enemigas:
-            ex, ey = estructura
-            distancia = ((minion["pos"][0] - ex)**2 + (minion["pos"][1] - ey)**2)**0.5
-            if distancia < minion["rango_ataque"]:
-                minion["objetivo"] = estructura
-                # Lógica de ataque (daño a la estructura)
-                break
 
     def actualizar_estructuras(self, dt):
         """Actualización completa del estado de todas las estructuras"""

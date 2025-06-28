@@ -384,12 +384,12 @@ class Juego:
         """Genera una oleada de minions (melee, caster, cañón) con las rutas definidas"""
         oleada = []
         tipos_minions = ["melee", "caster", "siege"]  # 1 minion de cada tipo por ruta
-        
+
         # Configuración base según el equipo
         if equipo == "aliados":
             punto_inicio = self.nexos["aliados"][0]  # Base aliada (esquina inf. izquierda)
             destino_final = self.nexos["enemigos"][0]  # Base enemiga (esquina sup. derecha)
-            
+
             # Rutas para aliados (3 rutas distintas)
             rutas = [
                 {  # Ruta 1: Inferior Azul -> Derecha Azul -> Base Enemiga
@@ -418,26 +418,29 @@ class Juego:
             rutas = [
                 {  # Ruta 1: Superior Roja -> Izquierda Roja -> Base Aliada
                     "id": "enemigos_ruta_roja",
-                    "puntos": [punto_inicio] +  # Comenzar desde la base enemiga
-                              self.mapa["rutas"][1]["puntos"][::-1] +  # Ruta superior roja invertida (de derecha a izquierda)
-                              self.mapa["rutas"][2]["puntos"][1:],     # Ruta izquierda roja (omitir primer punto)
+                    "puntos": [punto_inicio] +  # Base enemiga
+                              [(self.ANCHO - 49, 100), (49, 100)] +  # Ruta superior roja (invertida)
+                              [(49, self.ALTO - 100)],  # Ruta izquierda roja
                     "destino": destino_final
                 },
-                {  # Ruta 2: Diagonal Amarilla directa (invertida para enemigos)
+                {  # Ruta 2: Diagonal Amarilla directa (invertida)
                     "id": "enemigos_ruta_amarilla",
-                    "puntos": [punto_inicio] +  # Comenzar desde la base enemiga
-                              self.mapa["rutas"][4]["puntos"][::-1],  # Ruta amarilla invertida
+                    "puntos": [punto_inicio] +  # Base enemiga
+                              [(self.ANCHO - 49, 100), (49, self.ALTO - 100)],  # Ruta amarilla invertida
                     "destino": destino_final
                 },
                 {  # Ruta 3: Derecha Azul -> Inferior Azul -> Base Aliada
                     "id": "enemigos_ruta_azul",
-                    "puntos": [punto_inicio] +  # Comenzar desde la base enemiga
-                              self.mapa["rutas"][3]["puntos"][::-1] +  # Ruta derecha azul invertida (de arriba a abajo)
-                              self.mapa["rutas"][0]["puntos"][::-1][1:],  # Ruta inferior azul invertida (omitir primer punto)
+                    "puntos": [
+                        (750, 70),  # Base enemiga
+                        (self.ANCHO - 49, 100),  # Inicio ruta derecha azul (parte superior)
+                        (self.ANCHO - 49, self.ALTO - 100),  # Fin ruta derecha azul
+                        (49, self.ALTO - 100)  # Base aliada
+                    ],
                     "destino": destino_final
                 }
             ]
-        
+
         # Resto del código (generación de minions) permanece igual...
         for ruta in rutas:
             for tipo in tipos_minions:
@@ -446,7 +449,7 @@ class Juego:
                     "caster": {"vida": 60, "daño": 25, "velocidad": 1.8, "rango_ataque": 80},
                     "siege": {"vida": 150, "daño": 40, "velocidad": 1.5, "rango_ataque": 120}
                 }[tipo]
-                
+
                 oleada.append({
                     "tipo": tipo,
                     "vida": stats["vida"],
@@ -461,7 +464,7 @@ class Juego:
                     "puntos_ruta": ruta["puntos"].copy(),
                     "indice_punto_actual": 0
                 })
-        
+
         return oleada
     
     def calcular_velocidad(self, ruta, tiempo_objetivo_segundos):

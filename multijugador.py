@@ -463,6 +463,10 @@ class Juego:
 
     def generar_oleada(self, equipo):
         """Genera una oleada de minions (melee, caster, cañón) con las rutas definidas"""
+        # Cuando hay conexión, no generar oleadas localmente (el servidor las enviará)
+        if self.conectado:
+            return []
+            
         oleada = []
         tipos_minions = ["melee", "caster", "siege"]  # 1 minion de cada tipo por ruta
     
@@ -556,7 +560,7 @@ class Juego:
                     "destino": ruta["destino"],
                     "puntos_ruta": ruta["puntos"].copy(),
                     "indice_punto_actual": 0,
-                    "reduccion_daño": 0  # Añadido para consistencia
+                    "reduccion_daño": 0
                 })
     
         return oleada
@@ -583,38 +587,28 @@ class Juego:
         """Actualiza el temporizador de oleadas y genera nuevas si es necesario"""
         self.oleadas["tiempo_juego"] += dt / 1000  # Convertir ms a segundos
         
-        # La primera oleada sale a los 65 segundos (1:05)
-        if not self.oleadas["primer_oleada"] and self.oleadas["tiempo_juego"] >= 65:
-            self.oleadas["primer_oleada"] = True
-            self.oleadas["tiempo_ultima_oleada"] = self.oleadas["tiempo_juego"]
-            self.oleadas["contador_oleadas"] += 1
+        # Solo generar oleadas localmente si no hay conexión al servidor
+        if not self.conectado:
+            # La primera oleada sale a los 65 segundos (1:05)
+            if not self.oleadas["primer_oleada"] and self.oleadas["tiempo_juego"] >= 65:
+                self.oleadas["primer_oleada"] = True
+                self.oleadas["tiempo_ultima_oleada"] = self.oleadas["tiempo_juego"]
+                self.oleadas["contador_oleadas"] += 1
+                
+                # Generar oleadas para ambos equipos (solo en modo local)
+                self.minions["aliados"].extend(self.generar_oleada("aliados"))
+                self.minions["enemigos"].extend(self.generar_oleada("enemigos"))
+                return
             
-            # Generar oleadas para ambos equipos
-            self.minions["aliados"].extend(self.generar_oleada("aliados"))
-            self.minions["enemigos"].extend(self.generar_oleada("enemigos"))
+            tiempo_desde_ultima = self.oleadas["tiempo_juego"] - self.oleadas["tiempo_ultima_oleada"]
             
-            if self.conectado:
-                self.enviar_mensaje("nueva_oleada", {
-                    "contador": self.oleadas["contador_oleadas"],
-                    "tiempo": self.oleadas["tiempo_juego"]
-                })
-            return
-        
-        tiempo_desde_ultima = self.oleadas["tiempo_juego"] - self.oleadas["tiempo_ultima_oleada"]
-        
-        if tiempo_desde_ultima >= self.oleadas["intervalo"] and self.oleadas["primer_oleada"]:
-            self.oleadas["tiempo_ultima_oleada"] = self.oleadas["tiempo_juego"]
-            self.oleadas["contador_oleadas"] += 1
-            
-            # Generar oleadas para ambos equipos
-            self.minions["aliados"].extend(self.generar_oleada("aliados"))
-            self.minions["enemigos"].extend(self.generar_oleada("enemigos"))
-            
-            if self.conectado:
-                self.enviar_mensaje("nueva_oleada", {
-                    "contador": self.oleadas["contador_oleadas"],
-                    "tiempo": self.oleadas["tiempo_juego"]
-                })
+            if tiempo_desde_ultima >= self.oleadas["intervalo"] and self.oleadas["primer_oleada"]:
+                self.oleadas["tiempo_ultima_oleada"] = self.oleadas["tiempo_juego"]
+                self.oleadas["contador_oleadas"] += 1
+                
+                # Generar oleadas para ambos equipos (solo en modo local)
+                self.minions["aliados"].extend(self.generar_oleada("aliados"))
+                self.minions["enemigos"].extend(self.generar_oleada("enemigos"))
 
     def actualizar_minions(self):
         """Actualiza el movimiento de los minions según sus rutas asignadas"""
@@ -623,33 +617,37 @@ class Juego:
                 # --- Movimiento ---
                 puntos_ruta = minion["puntos_ruta"]
                 indice_punto = minion["indice_punto_actual"]
-
+    
                 # Si no quedan puntos, ir al destino final
                 if indice_punto >= len(puntos_ruta):
                     destino = minion["destino"]
                 else:
                     destino = puntos_ruta[indice_punto]
-
+    
                 # Calcular dirección y mover
                 dx = destino[0] - minion["pos"][0]
                 dy = destino[1] - minion["pos"][1]
                 distancia = (dx**2 + dy**2)**0.5
-
+    
                 if distancia > 5:  # Mover si no ha llegado al punto
                     minion["pos"][0] += (dx / distancia) * minion["velocidad"]
                     minion["pos"][1] += (dy / distancia) * minion["velocidad"]
                 else:
                     minion["indice_punto_actual"] += 1  # Pasar al siguiente punto
-
+    
                 # --- Verificar si llegó al final de la ruta ---
                 if indice_punto >= len(puntos_ruta):
                     distancia_final = ((minion["pos"][0] - minion["destino"][0])**2 + 
                                      (minion["pos"][1] - minion["destino"][1])**2)**0.5
                     if distancia_final < 10:  # Si llegó a la base enemiga
                         self.minions[equipo].remove(minion)
-                        # Aquí podrías añadir daño al nexo si es necesario
-
-                # --- Ataque a estructuras/enemigos (opcional) ---
+                        if self.conectado:
+                            self.enviar_mensaje("minion_llego_base", {
+                                "equipo": equipo,
+                                "tipo": minion["tipo"]
+                            })
+    
+                # --- Ataque a estructuras/enemigos ---
                 self.verificar_ataque(minion)
 
     def verificar_ataque(self, minion):
@@ -805,6 +803,13 @@ class Juego:
                         
                         # Actualizar tiempo del último ataque
                         torre["ultimo_ataque"] = tiempo_actual
+                        
+                        # Notificar al servidor si la torre destruyó algo
+                        if tipo == "minion" and objetivo["vida"] <= 0 and self.conectado:
+                            self.enviar_mensaje("minion_destruido", {
+                                "equipo": equipo_opuesto,
+                                "tipo": objetivo["tipo"]
+                            })
                     except (KeyError, TypeError, ValueError):
                         pass
             
@@ -873,6 +878,11 @@ class Juego:
                             objetivo["vida"] -= daño_real
                             if objetivo["vida"] <= 0:
                                 self.minions[equipo_opuesto].remove(objetivo)
+                                if self.conectado:
+                                    self.enviar_mensaje("minion_destruido", {
+                                        "equipo": equipo_opuesto,
+                                        "tipo": objetivo["tipo"]
+                                    })
                         else:  # jugador
                             objetivo["vida"] -= daño_real
                     except (KeyError, TypeError, ValueError):
@@ -1204,6 +1214,70 @@ class Juego:
                 self.conectado = False
                 break
 
+    def actualizar_estado_juego(self, estado):
+        """Actualiza el estado completo del juego con los datos del servidor"""
+        try:
+            # Actualizar mapa
+            if "mapa" in estado:
+                self.mapa["rutas"] = estado["mapa"].get("rutas", [])
+                self.mapa["scroll_y"] = estado["mapa"].get("scroll_y", 0)
+            
+            # Actualizar estructuras
+            if "estructuras" in estado:
+                for tipo_estructura, equipos in estado["estructuras"].items():
+                    if tipo_estructura in self.estructuras:
+                        for equipo, estructuras in equipos.items():
+                            if equipo in self.estructuras[tipo_estructura]:
+                                # Actualizar solo si el número de estructuras coincide
+                                if len(estructuras) == len(self.estructuras[tipo_estructura][equipo]):
+                                    for i, estructura in enumerate(estructuras):
+                                        if i < len(self.estructuras[tipo_estructura][equipo]):
+                                            self.estructuras[tipo_estructura][equipo][i].update({
+                                                "vida": float(estructura.get("vida", 100)),
+                                                "destruida": bool(estructura.get("destruida", False)),
+                                                "puede_atacar": bool(estructura.get("puede_atacar", False)),
+                                                "tiempo_reconstruccion": float(estructura.get("tiempo_reconstruccion", 0))
+                                            })
+            
+            # Actualizar minions
+            if "minions" in estado:
+                for equipo, minions in estado["minions"].items():
+                    if equipo in self.minions:
+                        self.minions[equipo] = []
+                        for minion in minions:
+                            try:
+                                self.minions[equipo].append({
+                                    "tipo": str(minion.get("tipo", "melee")),
+                                    "vida": float(minion.get("vida", 100)),
+                                    "vida_max": float(minion.get("vida_max", 100)),
+                                    "daño": float(minion.get("daño", 15)),
+                                    "velocidad": float(minion.get("velocidad", 2)),
+                                    "ruta_id": str(minion.get("ruta_id", "")),
+                                    "pos": [float(minion.get("pos", [0, 0])[0]), float(minion.get("pos", [0, 0])[1])],
+                                    "objetivo": minion.get("objetivo"),
+                                    "equipo": str(minion.get("equipo", "aliados")),
+                                    "rango_ataque": float(minion.get("rango_ataque", 40)),
+                                    "destino": [float(minion.get("destino", [0, 0])[0]), float(minion.get("destino", [0, 0])[1])],
+                                    "puntos_ruta": [[float(p[0]), float(p[1])] for p in minion.get("puntos_ruta", [])],
+                                    "indice_punto_actual": int(minion.get("indice_punto_actual", 0)),
+                                    "reduccion_daño": float(minion.get("reduccion_daño", 0))
+                                })
+                            except (KeyError, TypeError, ValueError):
+                                continue
+            
+            # Actualizar oleadas
+            if "oleadas" in estado:
+                self.oleadas.update({
+                    "tiempo_ultima_oleada": float(estado["oleadas"].get("tiempo_ultima_oleada", 0)),
+                    "intervalo": float(estado["oleadas"].get("intervalo", 30)),
+                    "contador_oleadas": int(estado["oleadas"].get("contador_oleadas", 0)),
+                    "tiempo_juego": float(estado["oleadas"].get("tiempo_juego", 0)),
+                    "primer_oleada": bool(estado["oleadas"].get("primer_oleada", False))
+                })
+        
+        except Exception as e:
+            print(f"Error actualizando estado del juego: {e}")
+
     def procesar_mensaje(self, mensaje):
         """Procesar mensajes recibidos del servidor"""
         try:
@@ -1212,9 +1286,37 @@ class Juego:
             if tipo == "bienvenida":
                 print(f"Conectado al servidor: {mensaje.get('mensaje')}")
                 self.id_cliente = mensaje.get("id")
+                
                 # Actualizar lista de jugadores con los datos recibidos
                 if "jugadores" in mensaje:
-                    self.otros_jugadores = mensaje["jugadores"]
+                    self.otros_jugadores = {
+                        id_jugador: {
+                            "nombre": str(datos.get("nombre", f"Jugador{id_jugador}"))[:16],
+                            "personaje": int(datos.get("personaje", 1)),
+                            "vida": float(datos.get("vida", 100)),
+                            "vida_max": float(datos.get("vida_max", 100)),
+                            "pos": [float(datos.get("pos", [0, 0])[0]), float(datos.get("pos", [0, 0])[1])],
+                            "velocidad": float(datos.get("velocidad", 5)),
+                            "daño": float(datos.get("daño", 20)),
+                            "nivel": int(datos.get("nivel", 1)),
+                            "experiencia": float(datos.get("experiencia", 0)),
+                            "reduccion_daño": float(datos.get("reduccion_daño", 0))
+                        }
+                        for id_jugador, datos in mensaje["jugadores"].items()
+                    }
+                
+                # Actualizar estado completo del juego si está en el mensaje
+                if "estado_juego" in mensaje:
+                    self.actualizar_estado_juego(mensaje["estado_juego"])
+                
+                # Actualizar oleadas si están en el mensaje
+                if "oleada" in mensaje:
+                    self.oleadas.update({
+                        "contador_oleadas": int(mensaje["oleada"].get("contador", 0)),
+                        "tiempo_juego": float(mensaje["oleada"].get("tiempo", 0)),
+                        "primer_oleada": True  # Asegurar que se marca como iniciado
+                    })
+            
             elif tipo == "jugadores":
                 # Validar estructura de los jugadores
                 jugadores_validos = {}
@@ -1235,6 +1337,7 @@ class Juego:
                     except (KeyError, TypeError, ValueError):
                         continue
                 self.otros_jugadores = jugadores_validos
+            
             elif tipo == "nuevo_jugador":
                 try:
                     self.otros_jugadores[mensaje["id"]] = {
@@ -1251,9 +1354,11 @@ class Juego:
                     }
                 except (KeyError, TypeError, ValueError):
                     pass
+            
             elif tipo == "jugador_desconectado":
                 if mensaje["id"] in self.otros_jugadores:
                     del self.otros_jugadores[mensaje["id"]]
+            
             elif tipo == "actualizacion_posicion":
                 if mensaje["id"] in self.otros_jugadores:
                     try:
@@ -1263,20 +1368,102 @@ class Juego:
                         ]
                     except (KeyError, TypeError, ValueError):
                         pass
+            
             elif tipo == "nueva_oleada":
                 try:
-                    self.oleadas["contador_oleadas"] = int(mensaje.get("contador", 0))
-                    self.oleadas["tiempo_juego"] = float(mensaje.get("tiempo", 0))
+                    self.oleadas.update({
+                        "contador_oleadas": int(mensaje.get("contador", 0)),
+                        "tiempo_juego": float(mensaje.get("tiempo", 0)),
+                        "tiempo_ultima_oleada": float(mensaje.get("tiempo", 0)),  # Actualizar también este valor
+                        "primer_oleada": True  # Asegurar que está marcado como iniciado
+                    })
                     
-                    # Limpiar minions existentes y generar nuevos
-                    self.minions["aliados"] = []
-                    self.minions["enemigos"] = []
-                    
-                    # Generar oleadas locales con estructura válida
-                    self.minions["aliados"].extend(self.generar_oleada("aliados"))
-                    self.minions["enemigos"].extend(self.generar_oleada("enemigos"))
+                    # Limpiar minions existentes solo si el servidor lo indica
+                    if mensaje.get("limpiar", False):
+                        self.minions["aliados"].clear()
+                        self.minions["enemigos"].clear()
                 except (KeyError, TypeError, ValueError):
                     pass
+            
+            elif tipo == "estado_juego":
+                # Actualizar minions primero
+                if "minions" in mensaje:
+                    for equipo in ["aliados", "enemigos"]:
+                        if equipo in mensaje["minions"]:
+                            # Mantener minions existentes si no se reciben nuevos
+                            if mensaje["minions"][equipo]:
+                                self.minions[equipo] = []
+                                for minion_data in mensaje["minions"][equipo]:
+                                    try:
+                                        self.minions[equipo].append({
+                                            "tipo": str(minion_data.get("tipo", "melee")),
+                                            "vida": float(minion_data.get("vida", 100)),
+                                            "vida_max": float(minion_data.get("vida_max", 100)),
+                                            "daño": float(minion_data.get("daño", 15)),
+                                            "velocidad": float(minion_data.get("velocidad", 2)),
+                                            "ruta_id": str(minion_data.get("ruta_id", "")),
+                                            "pos": [float(minion_data.get("pos", [0, 0])[0]), 
+                                                   float(minion_data.get("pos", [0, 0])[1])],
+                                            "objetivo": minion_data.get("objetivo"),
+                                            "equipo": str(minion_data.get("equipo", "aliados")),
+                                            "rango_ataque": float(minion_data.get("rango_ataque", 40)),
+                                            "destino": [float(minion_data.get("destino", [0, 0])[0]), 
+                                                       float(minion_data.get("destino", [0, 0])[1])],
+                                            "puntos_ruta": [[float(p[0]), float(p[1])] 
+                                                           for p in minion_data.get("puntos_ruta", [])],
+                                            "indice_punto_actual": int(minion_data.get("indice_punto_actual", 0)),
+                                            "reduccion_daño": float(minion_data.get("reduccion_daño", 0))
+                                        })
+                                    except (KeyError, TypeError, ValueError):
+                                        continue
+                
+                # Actualizar oleadas
+                if "oleadas" in mensaje:
+                    self.oleadas.update({
+                        "tiempo_ultima_oleada": float(mensaje["oleadas"].get("tiempo_ultima_oleada", 0)),
+                        "intervalo": float(mensaje["oleadas"].get("intervalo", 30)),
+                        "contador_oleadas": int(mensaje["oleadas"].get("contador_oleadas", 0)),
+                        "tiempo_juego": float(mensaje["oleadas"].get("tiempo_juego", 0)),
+                        "primer_oleada": bool(mensaje["oleadas"].get("primer_oleada", False))
+                    })
+                
+                # Actualizar estructuras
+                if "estructuras" in mensaje:
+                    for tipo_estructura, equipos in mensaje["estructuras"].items():
+                        if tipo_estructura in self.estructuras:
+                            for equipo, estructuras in equipos.items():
+                                if equipo in self.estructuras[tipo_estructura]:
+                                    for i, estructura in enumerate(estructuras):
+                                        if i < len(self.estructuras[tipo_estructura][equipo]):
+                                            self.estructuras[tipo_estructura][equipo][i].update({
+                                                "vida": float(estructura.get("vida", 100)),
+                                                "destruida": bool(estructura.get("destruida", False)),
+                                                "puede_atacar": bool(estructura.get("puede_atacar", False)),
+                                                "tiempo_reconstruccion": float(estructura.get("tiempo_reconstruccion", 0))
+                                            })
+            
+            elif tipo == "estructura_destruida":
+                try:
+                    tipo_estructura = mensaje.get("tipo")
+                    equipo = mensaje.get("equipo")
+                    indice = mensaje.get("indice")
+                    
+                    if (tipo_estructura in self.estructuras and 
+                        equipo in self.estructuras[tipo_estructura] and
+                        indice < len(self.estructuras[tipo_estructura][equipo])):
+                        
+                        self.estructuras[tipo_estructura][equipo][indice]["destruida"] = True
+                        
+                        # Si es un inhibidor, actualizar estado de ataque de los nexos
+                        if tipo_estructura == "inhibidores":
+                            equipo_opuesto = "enemigos" if equipo == "aliados" else "aliados"
+                            for nexo in self.estructuras["nexos"][equipo_opuesto]:
+                                inhibidores_destruidos = [i for i in self.estructuras["inhibidores"][equipo] 
+                                                        if i["destruido"]]
+                                nexo["puede_atacar"] = len(inhibidores_destruidos) > 0
+                except (KeyError, TypeError, ValueError):
+                    pass
+        
         except Exception as e:
             print(f"Error procesando mensaje: {e}")
 

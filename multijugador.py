@@ -1138,7 +1138,7 @@ class Juego:
             # Botón Jugar
             if self.ANCHO//2 - 150 <= x <= self.ANCHO//2 + 150 and 250 <= y <= 310:
                 if not self.conectado:
-                    if self.conectar_servidor("localhost", 5555):
+                    if self.conectar_servidor("26.176.7.141", 5555):
                         self.estado = "seleccion"
                 else:
                     self.estado = "seleccion"

@@ -1,4 +1,4 @@
-# servidor.py - Servidor para el juego multijugador (versión completa)
+# servidor.py - Servidor para el juego multijugador (versión completa mejorada)
 import socket
 import json
 import threading
@@ -33,46 +33,72 @@ class Servidor:
             "estructuras": {
                 "torres": {
                     "aliadas": [
-                        {"pos": [200, 480], "vida": 2000, "destruida": False, "ruta": 1, "orden": 3},
-                        {"pos": [400, 480], "vida": 2000, "destruida": False, "ruta": 1, "orden": 2},
-                        {"pos": [600, 480], "vida": 2000, "destruida": False, "ruta": 1, "orden": 1},
-                        {"pos": [50, 170], "vida": 2000, "destruida": False, "ruta": 2, "orden": 1},
-                        {"pos": [50, 300], "vida": 2000, "destruida": False, "ruta": 2, "orden": 2},
-                        {"pos": [50, 400], "vida": 2000, "destruida": False, "ruta": 2, "orden": 3},
-                        {"pos": [160, 415], "vida": 2000, "destruida": False, "ruta": 4, "orden": 3},
-                        {"pos": [275, 355], "vida": 2000, "destruida": False, "ruta": 4, "orden": 2},
-                        {"pos": [375, 300], "vida": 2000, "destruida": False, "ruta": 4, "orden": 1}
+                        {"pos": [200, 480], "vida": 2000, "vida_max": 2000, "daño": 15, "daño_base": 15, 
+                         "reduccion_daño": 20, "rango": 200, "ruta": 1, "orden": 3, "destruida": False, "ultimo_ataque": 0},
+                        {"pos": [400, 480], "vida": 2000, "vida_max": 2000, "daño": 10, "daño_base": 10, 
+                         "reduccion_daño": 10, "rango": 200, "ruta": 1, "orden": 2, "destruida": False, "ultimo_ataque": 0},
+                        {"pos": [600, 480], "vida": 2000, "vida_max": 2000, "daño": 5, "daño_base": 5, 
+                         "reduccion_daño": 0, "rango": 200, "ruta": 1, "orden": 1, "destruida": False, "ultimo_ataque": 0},
+                        {"pos": [50, 170], "vida": 2000, "vida_max": 2000, "daño": 5, "daño_base": 5, 
+                         "reduccion_daño": 0, "rango": 200, "ruta": 2, "orden": 1, "destruida": False, "ultimo_ataque": 0},
+                        {"pos": [50, 300], "vida": 2000, "vida_max": 2000, "daño": 10, "daño_base": 10, 
+                         "reduccion_daño": 10, "rango": 200, "ruta": 2, "orden": 2, "destruida": False, "ultimo_ataque": 0},
+                        {"pos": [50, 400], "vida": 2000, "vida_max": 2000, "daño": 15, "daño_base": 15, 
+                         "reduccion_daño": 20, "rango": 200, "ruta": 2, "orden": 3, "destruida": False, "ultimo_ataque": 0},
+                        {"pos": [160, 415], "vida": 2000, "vida_max": 2000, "daño": 15, "daño_base": 15, 
+                         "reduccion_daño": 20, "rango": 200, "ruta": 4, "orden": 3, "destruida": False, "ultimo_ataque": 0},
+                        {"pos": [275, 355], "vida": 2000, "vida_max": 2000, "daño": 10, "daño_base": 10, 
+                         "reduccion_daño": 10, "rango": 200, "ruta": 4, "orden": 2, "destruida": False, "ultimo_ataque": 0},
+                        {"pos": [375, 300], "vida": 2000, "vida_max": 2000, "daño": 5, "daño_base": 5, 
+                         "reduccion_daño": 0, "rango": 200, "ruta": 4, "orden": 1, "destruida": False, "ultimo_ataque": 0}
                     ],
                     "enemigas": [
-                        {"pos": [200, 80], "vida": 2000, "destruida": False, "ruta": 0, "orden": 1},
-                        {"pos": [400, 80], "vida": 2000, "destruida": False, "ruta": 0, "orden": 2},
-                        {"pos": [600, 80], "vida": 2000, "destruida": False, "ruta": 0, "orden": 3},
-                        {"pos": [750, 170], "vida": 2000, "destruida": False, "ruta": 3, "orden": 3},
-                        {"pos": [750, 300], "vida": 2000, "destruida": False, "ruta": 3, "orden": 2},
-                        {"pos": [750, 400], "vida": 2000, "destruida": False, "ruta": 3, "orden": 1},
-                        {"pos": [495, 230], "vida": 2000, "destruida": False, "ruta": 0, "orden": 1},
-                        {"pos": [575, 180], "vida": 2000, "destruida": False, "ruta": 0, "orden": 2},
-                        {"pos": [655, 130], "vida": 2000, "destruida": False, "ruta": 0, "orden": 3}
+                        {"pos": [200, 80], "vida": 2000, "vida_max": 2000, "daño": 5, "daño_base": 5, 
+                         "reduccion_daño": 0, "rango": 200, "ruta": 0, "orden": 1, "destruida": False, "ultimo_ataque": 0},
+                        {"pos": [400, 80], "vida": 2000, "vida_max": 2000, "daño": 10, "daño_base": 10, 
+                         "reduccion_daño": 10, "rango": 200, "ruta": 0, "orden": 2, "destruida": False, "ultimo_ataque": 0},
+                        {"pos": [600, 80], "vida": 2000, "vida_max": 2000, "daño": 15, "daño_base": 15, 
+                         "reduccion_daño": 20, "rango": 200, "ruta": 0, "orden": 3, "destruida": False, "ultimo_ataque": 0},
+                        {"pos": [750, 170], "vida": 2000, "vida_max": 2000, "daño": 15, "daño_base": 15, 
+                         "reduccion_daño": 20, "rango": 200, "ruta": 3, "orden": 3, "destruida": False, "ultimo_ataque": 0},
+                        {"pos": [750, 300], "vida": 2000, "vida_max": 2000, "daño": 10, "daño_base": 10, 
+                         "reduccion_daño": 10, "rango": 200, "ruta": 3, "orden": 2, "destruida": False, "ultimo_ataque": 0},
+                        {"pos": [750, 400], "vida": 2000, "vida_max": 2000, "daño": 5, "daño_base": 5, 
+                         "reduccion_daño": 0, "rango": 200, "ruta": 3, "orden": 1, "destruida": False, "ultimo_ataque": 0},
+                        {"pos": [495, 230], "vida": 2000, "vida_max": 2000, "daño": 5, "daño_base": 5, 
+                         "reduccion_daño": 0, "rango": 200, "ruta": 0, "orden": 1, "destruida": False, "ultimo_ataque": 0},
+                        {"pos": [575, 180], "vida": 2000, "vida_max": 2000, "daño": 10, "daño_base": 10, 
+                         "reduccion_daño": 10, "rango": 200, "ruta": 0, "orden": 2, "destruida": False, "ultimo_ataque": 0},
+                        {"pos": [655, 130], "vida": 2000, "vida_max": 2000, "daño": 15, "daño_base": 15, 
+                         "reduccion_daño": 20, "rango": 200, "ruta": 0, "orden": 3, "destruida": False, "ultimo_ataque": 0}
                     ]
                 },
                 "inhibidores": {
                     "aliados": [
-                        {"pos": [150, 480], "vida": 2500, "destruido": False, "ruta": 1},
-                        {"pos": [50, 435], "vida": 2500, "destruido": False, "ruta": 2},
-                        {"pos": [140, 435], "vida": 2500, "destruido": False, "ruta": 4}
+                        {"pos": [150, 480], "vida": 2500, "vida_max": 2500, "daño": 0, "rango": 0, 
+                         "ruta": 1, "destruido": False, "tiempo_reconstruccion": 0},
+                        {"pos": [50, 435], "vida": 2500, "vida_max": 2500, "daño": 0, "rango": 0, 
+                         "ruta": 2, "destruido": False, "tiempo_reconstruccion": 0},
+                        {"pos": [140, 435], "vida": 2500, "vida_max": 2500, "daño": 0, "rango": 0, 
+                         "ruta": 4, "destruido": False, "tiempo_reconstruccion": 0}
                     ],
                     "enemigos": [
-                        {"pos": [685, 120], "vida": 2500, "destruido": False, "ruta": 0},
-                        {"pos": [750, 145], "vida": 2500, "destruido": False, "ruta": 3},
-                        {"pos": [655, 80], "vida": 2500, "destruido": False, "ruta": 4}
+                        {"pos": [685, 120], "vida": 2500, "vida_max": 2500, "daño": 0, "rango": 0, 
+                         "ruta": 0, "destruido": False, "tiempo_reconstruccion": 0},
+                        {"pos": [750, 145], "vida": 2500, "vida_max": 2500, "daño": 0, "rango": 0, 
+                         "ruta": 3, "destruido": False, "tiempo_reconstruccion": 0},
+                        {"pos": [655, 80], "vida": 2500, "vida_max": 2500, "daño": 0, "rango": 0, 
+                         "ruta": 4, "destruido": False, "tiempo_reconstruccion": 0}
                     ]
                 },
                 "nexos": {
                     "aliados": [
-                        {"pos": [40, 490], "vida": 5000, "destruido": False, "puede_atacar": False}
+                        {"pos": [40, 490], "vida": 5000, "vida_max": 5000, "daño": 30, "rango": 250, 
+                         "puede_atacar": False, "destruido": False}
                     ],
                     "enemigos": [
-                        {"pos": [750, 70], "vida": 5000, "destruido": False, "puede_atacar": False}
+                        {"pos": [750, 70], "vida": 5000, "vida_max": 5000, "daño": 30, "rango": 250, 
+                         "puede_atacar": False, "destruido": False}
                     ]
                 }
             },
@@ -89,7 +115,11 @@ class Servidor:
             }
         }
 
+        # Iniciar hilos de actualización
         self.iniciar_servidor()
+        threading.Thread(target=self.actualizar_tiempo_juego, daemon=True).start()
+        threading.Thread(target=self.actualizar_minions, daemon=True).start()
+        threading.Thread(target=self.actualizar_estructuras, daemon=True).start()
 
     def iniciar_servidor(self):
         """Inicia el servidor y acepta conexiones entrantes"""
@@ -97,9 +127,6 @@ class Servidor:
         self.server.bind((self.host, self.port))
         self.server.listen(5)
         print(f"Servidor iniciado en {self.host}:{self.port}")
-
-        # Hilo para actualizar el tiempo del juego y oleadas
-        threading.Thread(target=self.actualizar_tiempo_juego, daemon=True).start()
 
         # Aceptar conexiones entrantes
         while True:
@@ -124,7 +151,8 @@ class Servidor:
                     self.generar_oleada("enemigos")
                     self.enviar_a_todos("nueva_oleada", {
                         "contador": self.estado_juego["oleadas"]["contador_oleadas"],
-                        "tiempo": tiempo
+                        "tiempo": tiempo,
+                        "limpiar": True  # Indicar que se deben limpiar minions anteriores
                     })
                 
                 # Oleadas posteriores cada 30 segundos
@@ -137,12 +165,78 @@ class Servidor:
                     self.generar_oleada("enemigos")
                     self.enviar_a_todos("nueva_oleada", {
                         "contador": self.estado_juego["oleadas"]["contador_oleadas"],
-                        "tiempo": tiempo
+                        "tiempo": tiempo,
+                        "limpiar": False  # No limpiar minions entre oleadas
                     })
 
-                # Enviar estado completo cada 5 segundos
-                if tiempo % 5 == 0:
+                # Enviar estado completo cada 2 segundos
+                if tiempo % 2 == 0:
                     self.enviar_a_todos("estado_juego", self.estado_juego)
+
+    def actualizar_minions(self):
+        """Actualiza el movimiento y estado de los minions"""
+        while True:
+            time.sleep(0.1)  # Actualizar 10 veces por segundo
+            with self.lock:
+                for equipo in ["aliados", "enemigos"]:
+                    for minion in self.estado_juego["minions"][equipo][:]:
+                        # Actualizar posición
+                        puntos_ruta = minion["puntos_ruta"]
+                        indice_punto = minion["indice_punto_actual"]
+
+                        if indice_punto >= len(puntos_ruta):
+                            destino = minion["destino"]
+                        else:
+                            destino = puntos_ruta[indice_punto]
+
+                        dx = destino[0] - minion["pos"][0]
+                        dy = destino[1] - minion["pos"][1]
+                        distancia = (dx**2 + dy**2)**0.5
+
+                        if distancia > 5:
+                            minion["pos"][0] += (dx / distancia) * minion["velocidad"]
+                            minion["pos"][1] += (dy / distancia) * minion["velocidad"]
+                        else:
+                            minion["indice_punto_actual"] += 1
+
+                        # Verificar si llegó a la base enemiga
+                        if indice_punto >= len(puntos_ruta):
+                            distancia_final = ((minion["pos"][0] - minion["destino"][0])**2 + 
+                                           (minion["pos"][1] - minion["destino"][1])**2)**0.5
+                            if distancia_final < 10:
+                                self.estado_juego["minions"][equipo].remove(minion)
+                                # Aquí podrías añadir lógica para dañar el nexo
+
+    def actualizar_estructuras(self):
+        """Actualiza el estado de las estructuras (torres, inhibidores, nexos)"""
+        while True:
+            time.sleep(1)  # Actualizar cada segundo
+            with self.lock:
+                # Reconstruir inhibidores después de 60 segundos
+                for equipo in ["aliados", "enemigos"]:
+                    for inhib in self.estado_juego["estructuras"]["inhibidores"][equipo]:
+                        if inhib["destruido"]:
+                            inhib["tiempo_reconstruccion"] += 1
+                            if inhib["tiempo_reconstruccion"] >= 60:
+                                inhib["vida"] = inhib["vida_max"]
+                                inhib["destruido"] = False
+                                inhib["tiempo_reconstruccion"] = 0
+                                
+                                # Actualizar estado de ataque de los nexos opuestos
+                                equipo_opuesto = "enemigos" if equipo == "aliados" else "aliados"
+                                for nexo in self.estado_juego["estructuras"]["nexos"][equipo_opuesto]:
+                                    inhibidores_destruidos = [i for i in self.estado_juego["estructuras"]["inhibidores"][equipo] 
+                                                          if i["destruido"]]
+                                    nexo["puede_atacar"] = len(inhibidores_destruidos) > 0
+
+                # Actualizar ataques de torres
+                tiempo_actual = self.estado_juego["oleadas"]["tiempo_juego"]
+                for equipo in ["aliadas", "enemigas"]:
+                    for torre in self.estado_juego["estructuras"]["torres"][equipo]:
+                        if not torre["destruida"] and tiempo_actual - torre["ultimo_ataque"] >= 10:
+                            torre["puede_atacar"] = True
+                        else:
+                            torre["puede_atacar"] = False
 
     def generar_oleada(self, equipo):
         """Genera una oleada de minions para un equipo"""
@@ -210,7 +304,7 @@ class Servidor:
 
                     try:
                         mensaje = json.loads(msg)
-                        tipo = mensaje.get("tipo")
+                        tipo = mensaje.get("type")
 
                         if tipo == "conectar":
                             # Asignar ID al cliente
@@ -350,20 +444,26 @@ class Servidor:
             })
             cliente.sendall((mensaje + '|').encode('utf-8'))
         except:
-            pass
+            print(f"Error enviando mensaje a cliente")
 
     def enviar_a_todos(self, tipo, contenido):
         """Envía un mensaje a todos los clientes conectados"""
         with self.lock:
             for id_jugador, datos in self.clientes.items():
-                self.enviar_mensaje(datos["socket"], tipo, contenido)
+                try:
+                    self.enviar_mensaje(datos["socket"], tipo, contenido)
+                except:
+                    print(f"Error enviando mensaje a jugador {id_jugador}")
 
     def enviar_a_todos_excepto(self, id_excluido, tipo, contenido):
         """Envía un mensaje a todos los clientes excepto al especificado"""
         with self.lock:
             for id_jugador, datos in self.clientes.items():
                 if id_jugador != id_excluido:
-                    self.enviar_mensaje(datos["socket"], tipo, contenido)
+                    try:
+                        self.enviar_mensaje(datos["socket"], tipo, contenido)
+                    except:
+                        print(f"Error enviando mensaje a jugador {id_jugador}")
 
 if __name__ == "__main__":
     # Usar la IP de Radmin VPN (26.176.7.141) o 0.0.0.0 para escuchar en todas las interfaces

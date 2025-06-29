@@ -20,6 +20,7 @@ class Juego:
             "nombre": "",
             "personaje": None,
             "vida": 100,
+            "vida_max": 100,  # Vida máxima del jugador
             "pos": [self.ANCHO // 2, self.ALTO - 100],
             "velocidad": 5,
             "daño": 20,
@@ -326,35 +327,30 @@ class Juego:
             self.pantalla.blit(self.nexo_enemigo_img, (x - 40, y - 40))
 
     def dibujar_jugador(self):
-        """Dibuja al jugador principal"""
+        """Dibuja al jugador principal con su barra de vida"""
+        # Dibujar personaje (código existente)
         if self.jugador["personaje"] == 1:
             imagen = self.personaje1_img
-        elif self.jugador["personaje"] == 2:
-            imagen = self.personaje2_img
         else:
-            # Imagen por defecto si no hay personaje seleccionado
-            imagen = pygame.Surface((50, 50), pygame.SRCALPHA)
-            imagen.fill((0, 255, 0))
-        
-        # Dibujar la imagen del personaje
+            imagen = self.personaje2_img
         self.pantalla.blit(imagen, (self.jugador["pos"][0] - 35, self.jugador["pos"][1] - 35))
 
-        # Nombre del jugador
-        nombre_texto = self.fuente_normal.render(self.jugador["nombre"], True, (255, 255, 255))
-        self.pantalla.blit(nombre_texto, (self.jugador["pos"][0] - nombre_texto.get_width() // 2, 
-                           self.jugador["pos"][1] - 40))
-        
-        # Barra de vida
+        # Barra de vida (versión mejorada)
         vida_width = 70
-        vida_actual = max(0, (self.jugador["vida"] / 100)) * vida_width
+        vida_actual = max(0, (self.jugador["vida"] / self.jugador["vida_max"])) * vida_width
+
+        # Fondo rojo (vida perdida)
         pygame.draw.rect(self.pantalla, (255, 0, 0), 
                         (self.jugador["pos"][0] - vida_width//2, self.jugador["pos"][1] - 50, vida_width, 5))
+
+        # Vida actual (verde)
         pygame.draw.rect(self.pantalla, (0, 255, 0), 
                         (self.jugador["pos"][0] - vida_width//2, self.jugador["pos"][1] - 50, vida_actual, 5))
     
     def dibujar_otros_jugadores(self):
         """Dibuja a los otros jugadores conectados"""
-        for jugador_id, datos in self.otros_jugadores.items():
+        for  datos in self.otros_jugadores.items():
+            # jugador_id, esto iria entre for y datos arriba
             if datos["personaje"] == 1:
                 imagen = self.personaje1_img
             elif datos["personaje"] == 2:
@@ -374,7 +370,7 @@ class Juego:
             
             # Barra de vida
             vida_width = 70
-            vida_actual = max(0, (datos["vida"] / 100) * vida_width)
+            vida_actual = max(0, (datos["vida"] / datos["vida_max"])) * vida_width
             pygame.draw.rect(self.pantalla, (255, 0, 0), 
                             (datos["pos"][0] - vida_width//2, datos["pos"][1] - 50, vida_width, 5))
             pygame.draw.rect(self.pantalla, (0, 255, 0), 
@@ -908,6 +904,11 @@ class Juego:
             self.oleadas["tiempo_juego"] = mensaje.get("tiempo", 0)
             self.minions["aliados"].extend(self.generar_oleada("aliados"))
             self.minions["enemigos"].extend(self.generar_oleada("enemigos"))
+        elif tipo == "jugador_dañado":
+            if mensaje["id"] == self.id_cliente:
+                self.jugador["vida"] = mensaje["vida"]
+            elif mensaje["id"] in self.otros_jugadores:
+                self.otros_jugadores[mensaje["id"]]["vida"] = mensaje["vida"]
 
     def enviar_mensaje(self, tipo, contenido):
         """Enviar mensaje al servidor"""

@@ -208,35 +208,35 @@ class Servidor:
                                 # Aquí podrías añadir lógica para dañar el nexo
 
     def actualizar_estructuras(self):
-        """Actualiza el estado de las estructuras (torres, inhibidores, nexos)"""
         while True:
             time.sleep(1)  # Actualizar cada segundo
             with self.lock:
-                # Reconstruir inhibidores después de 60 segundos
-                for equipo in ["aliados", "enemigos"]:
-                    for inhib in self.estado_juego["estructuras"]["inhibidores"][equipo]:
-                        if inhib["destruido"]:
-                            inhib["tiempo_reconstruccion"] += 1
-                            if inhib["tiempo_reconstruccion"] >= 60:
-                                inhib["vida"] = inhib["vida_max"]
-                                inhib["destruido"] = False
-                                inhib["tiempo_reconstruccion"] = 0
-                                
-                                # Actualizar estado de ataque de los nexos opuestos
-                                equipo_opuesto = "enemigos" if equipo == "aliados" else "aliados"
-                                for nexo in self.estado_juego["estructuras"]["nexos"][equipo_opuesto]:
-                                    inhibidores_destruidos = [i for i in self.estado_juego["estructuras"]["inhibidores"][equipo] 
-                                                          if i["destruido"]]
-                                    nexo["puede_atacar"] = len(inhibidores_destruidos) > 0
+                # 1. Verificar ataques de torres a jugadores
+                for equipo_torre in ["aliadas", "enemigas"]:
+                    for torre in self.estado_juego["estructuras"]["torres"][equipo_torre]:
+                        if not torre["destruida"]:
+                            # Torre puede atacar si ha pasado el tiempo de enfriamiento
+                            puede_atacar = (self.estado_juego["oleadas"]["tiempo_juego"] - torre["ultimo_ataque"] >= 10)
+                            torre["puede_atacar"] = puede_atacar
 
-                # Actualizar ataques de torres
-                tiempo_actual = self.estado_juego["oleadas"]["tiempo_juego"]
-                for equipo in ["aliadas", "enemigas"]:
-                    for torre in self.estado_juego["estructuras"]["torres"][equipo]:
-                        if not torre["destruida"] and tiempo_actual - torre["ultimo_ataque"] >= 10:
-                            torre["puede_atacar"] = True
-                        else:
-                            torre["puede_atacar"] = False
+                            # Buscar jugadores en rango
+                            for jugador_id, jugador in self.clientes.items():
+                                distancia = ((jugador["pos"][0] - torre["pos"][0])**2 + \
+                                            (jugador["pos"][1] - torre["pos"][1])**2)
+                                distancia = distancia**0.5
+
+                                if distancia <= torre["rango"] and puede_atacar:
+                                    # Aplicar daño al jugador
+                                    jugador["vida"] -= torre["daño"]
+                                    torre["ultimo_ataque"] = self.estado_juego["oleadas"]["tiempo_juego"]
+                                    print(f"Torre {torre['pos']} atacó a {jugador_id} (Vida restante: {jugador['vida']})")
+                                    # Enviar actualización a todos los clientes
+                                    self.enviar_a_todos("jugador_dañado", {
+                                        "id": jugador_id,
+                                        "vida": jugador["vida"],
+                                        "torre_pos": torre["pos"]
+                                    })
+                                    break  # Ataca a un jugador a la vez
 
     def generar_oleada(self, equipo):
         """Genera una oleada de minions para un equipo"""

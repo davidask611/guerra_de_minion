@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 
 class Servidor:
-    def __init__(self, host='0.0.0.0', port=5555):
+    def __init__(self, host='localhost', port=5555):
         self.host = host
         self.port = port
         self.server = None
@@ -467,4 +467,4 @@ class Servidor:
 
 if __name__ == "__main__":
     # Usar la IP de Radmin VPN (26.176.7.141) o 0.0.0.0 para escuchar en todas las interfaces
-    servidor = Servidor(host='26.176.7.141', port=5555)
+    servidor = Servidor(host='0.0.0.0', port=5555)
